@@ -23,18 +23,39 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   const [showManual, setShowManual] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
+  const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-    const reader = new BrowserMultiFormatReader(hints);
+    // Life Fitness-koderna är långa (~144 tecken) och därmed täta. TRY_HARDER
+    // låter ZXing göra fler och dyrare avkodningsförsök, vilket krävs när
+    // koden är liten i bild, blank av plast eller dåligt belyst — alltså i stort
+    // sett alltid på ett gym.
+    hints.set(DecodeHintType.TRY_HARDER, true);
+
+    const reader = new BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: 100,
+    });
 
     (async () => {
       try {
         const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: "environment" } } },
+          {
+            video: {
+              facingMode: { ideal: "environment" },
+              /*
+               * Utan detta ger Safari 640×480. En tät QR-kod på det avståndet
+               * man naturligt håller telefonen blir då bara ett par pixlar per
+               * modul och gick helt enkelt inte att avkoda — kameraappen
+               * klarade den, men inte vi. Full HD ger marginalen som behövs.
+               */
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+          },
           videoRef.current!,
           (result) => {
             if (!result || doneRef.current) return;
@@ -69,8 +90,15 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
       }
     })();
 
+    // Låser sig avkodningen ska man få ett konkret råd, inte stirra på en
+    // kamerabild som inte gör något.
+    const hintTimer = setTimeout(() => {
+      if (!cancelled && !doneRef.current) setStuck(true);
+    }, 8000);
+
     return () => {
       cancelled = true;
+      clearTimeout(hintTimer);
       controlsRef.current?.stop();
     };
   }, [onResult]);
@@ -119,6 +147,13 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
 
       {error ? (
         <p className="card px-4 py-3 text-sm text-warn">{error}</p>
+      ) : stuck ? (
+        <p className="card px-4 py-3 text-sm text-muted">
+          Får du inte kläm på koden? Håll telefonen{" "}
+          <span className="font-semibold text-white">15–20 cm</span> från
+          klistermärket så koden fyller rutan, och tänd lampan om det är mörkt.
+          Life Fitness-koderna är täta och behöver komma nära.
+        </p>
       ) : (
         <p className="text-center text-sm text-muted">
           Rikta kameran mot QR-koden på maskinen

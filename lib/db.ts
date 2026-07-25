@@ -71,11 +71,46 @@ export function newId(): string {
  * Vi plockar ut den identifierande delen så att samma maskin alltid ger
  * samma nyckel. Är innehållet inte en URL används råtexten trimmad.
  */
+/**
+ * Life Fitness LFconnect-koder ser ut så här:
+ *
+ *   https://trainer.lifefitness.com/qrredirect
+ *     ?referer-link=<base64 av https://halo.fitness/q?t=s&m=sste>
+ *     &referer-type=STRENGTH
+ *     &url-video=prJVihX68jA
+ *
+ * Det som identifierar maskinen är `t` (typ) och `m` (modell) inuti den
+ * base64-kodade länken. Resten är kringinfo — `url-video` pekar bara på en
+ * instruktionsfilm och kan ändras utan att maskinen gör det.
+ *
+ * Genom att plocka ut t+m blir nyckeln kort, läsbar och tål att Life Fitness
+ * lägger till, tar bort eller kastar om parametrar. Returnerar null när koden
+ * inte är en LFconnect-kod, så att den generella normaliseringen tar vid.
+ */
+function lifeFitnessKey(url: URL): string | null {
+  if (!/(^|\.)lifefitness\.com$/i.test(url.hostname)) return null;
+  const encoded = url.searchParams.get("referer-link");
+  if (!encoded) return null;
+  try {
+    const inner = new URL(atob(encoded));
+    const type = inner.searchParams.get("t");
+    const model = inner.searchParams.get("m");
+    if (!model) return null;
+    return `lifefitness:${type ?? "?"}:${model}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeQr(raw: string): string {
   const text = raw.trim();
   if (!text) return "";
   try {
     const url = new URL(text);
+
+    const lf = lifeFitnessKey(url);
+    if (lf) return lf;
+
     const params = new URLSearchParams(url.search);
     for (const key of [...params.keys()]) {
       if (key.toLowerCase().startsWith("utm_")) params.delete(key);
