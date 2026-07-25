@@ -9,3 +9,5 @@ build.log
 install.log
 dev.log
 deploy.log
+uninstall.log
+qrinstall.log

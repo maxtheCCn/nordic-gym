@@ -12,8 +12,20 @@ import { Button, TextInput } from "./ui";
  * snabbare, vilket spelar roll när man står och riktar telefonen mot en
  * maskin med dålig belysning.
  */
+/** Hints delas av live-skanning och fotoavkodning. */
+function scannerHints() {
+  const hints = new Map();
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
+  // Life Fitness-koderna är långa (~144 tecken) och därmed täta. TRY_HARDER
+  // låter ZXing göra fler och dyrare avkodningsförsök, vilket krävs när koden
+  // är liten i bild, blank av plast eller dåligt belyst.
+  hints.set(DecodeHintType.TRY_HARDER, true);
+  return hints;
+}
+
 export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   // Ref, inte state: callbacken från ZXing fyras av många gånger per sekund
   // och får inte hinna leverera samma kod två gånger innan state hunnit sätta.
@@ -24,6 +36,8 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [stuck, setStuck] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   // Vad kameran faktiskt gav oss. Utan detta går det inte att skilja
   // "kameran startade aldrig" från "kameran går men koden är för liten i bild".
   const [diag, setDiag] = useState<{
@@ -37,13 +51,7 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   useEffect(() => {
     let cancelled = false;
 
-    const hints = new Map();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-    // Life Fitness-koderna är långa (~144 tecken) och därmed täta. TRY_HARDER
-    // låter ZXing göra fler och dyrare avkodningsförsök, vilket krävs när
-    // koden är liten i bild, blank av plast eller dåligt belyst — alltså i stort
-    // sett alltid på ett gym.
-    hints.set(DecodeHintType.TRY_HARDER, true);
+    const hints = scannerHints();
 
     const reader = new BrowserMultiFormatReader(hints, {
       delayBetweenScanAttempts: 100,
@@ -56,6 +64,19 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
      * utan kamera helt.
      */
     const attempts: { label: string; video: MediaTrackConstraints }[] = [
+      {
+        /*
+         * Klistermärket är bara ~3 cm brett och koden tät. Ju fler pixlar per
+         * ruta desto större chans att den går att läsa på ett avstånd där
+         * kameran faktiskt får skärpa — därför frågar vi efter 4K först.
+         */
+        label: "4K bakkamera",
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+        },
+      },
       {
         label: "1920×1080 bakkamera",
         video: {
@@ -156,6 +177,37 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
     };
   }, [onResult]);
 
+  /**
+   * Avkodar ett foto i stället för videoströmmen.
+   *
+   * Det här är den pålitliga vägen på iPhone: Safaris getUserMedia varken
+   * växlar till makroobjektivet eller tvingar fram omfokusering, så på det
+   * avstånd som krävs för en tät kod blir videobilden suddig. iOS egna
+   * kameragränssnitt fixar både skärpa och full sensorupplösning, och en
+   * stillbild kan dessutom avkodas långsamt och noggrant.
+   */
+  async function decodePhoto(file: File) {
+    setPhotoBusy(true);
+    setPhotoError(null);
+    const url = URL.createObjectURL(file);
+    try {
+      const reader = new BrowserMultiFormatReader(scannerHints());
+      const result = await reader.decodeFromImageUrl(url);
+      navigator.vibrate?.(60);
+      doneRef.current = true;
+      controlsRef.current?.stop();
+      onResult(result.getText());
+    } catch {
+      setPhotoError(
+        "Hittade ingen QR-kod i bilden. Ta om den närmare, så att koden fyller " +
+          "större delen av bilden och är skarp.",
+      );
+    } finally {
+      URL.revokeObjectURL(url);
+      setPhotoBusy(false);
+    }
+  }
+
   async function toggleTorch() {
     const stream = videoRef.current?.srcObject as MediaStream | null;
     const track = stream?.getVideoTracks()[0];
@@ -202,15 +254,45 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
         <p className="card px-4 py-3 text-sm text-warn">{error}</p>
       ) : stuck ? (
         <p className="card px-4 py-3 text-sm text-muted">
-          Får du inte kläm på koden? Håll telefonen{" "}
-          <span className="font-semibold text-white">15–20 cm</span> från
-          klistermärket så koden fyller rutan, och tänd lampan om det är mörkt.
-          Life Fitness-koderna är täta och behöver komma nära.
+          Läser den inte av? Kameran i webbläsaren ställer inte om skärpan lika
+          bra som kamera-appen, och koderna på maskinerna är täta. Tryck{" "}
+          <span className="font-semibold text-white">Ta foto av koden</span>{" "}
+          nedan — då används telefonens riktiga kamera, och det brukar lösa det.
         </p>
       ) : (
         <p className="text-center text-sm text-muted">
           Rikta kameran mot QR-koden på maskinen
         </p>
+      )}
+
+      {/*
+        `capture="environment"` öppnar kameran direkt i stället för
+        bildbiblioteket. Att gå omvägen via ett foto låter iOS sköta makrofokus
+        och ger full sensorupplösning — vilket videoströmmen inte gör.
+      */}
+      <input
+        ref={photoRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void decodePhoto(file);
+          e.target.value = "";
+        }}
+      />
+      <Button
+        size="lg"
+        className="w-full"
+        disabled={photoBusy}
+        onClick={() => photoRef.current?.click()}
+      >
+        {photoBusy ? "Läser av bilden…" : "Ta foto av koden"}
+      </Button>
+
+      {photoError && (
+        <p className="card px-4 py-3 text-sm text-warn">{photoError}</p>
       )}
 
       {showManual ? (
