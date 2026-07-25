@@ -1,8 +1,8 @@
 "use client";
 
 import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { useEffect, useRef, useState } from "react";
+import { decodeImageFile, scannerHints } from "@/lib/decodeImage";
 import { Button, TextInput } from "./ui";
 
 /**
@@ -12,17 +12,6 @@ import { Button, TextInput } from "./ui";
  * snabbare, vilket spelar roll när man står och riktar telefonen mot en
  * maskin med dålig belysning.
  */
-/** Hints delas av live-skanning och fotoavkodning. */
-function scannerHints() {
-  const hints = new Map();
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-  // Life Fitness-koderna är långa (~144 tecken) och därmed täta. TRY_HARDER
-  // låter ZXing göra fler och dyrare avkodningsförsök, vilket krävs när koden
-  // är liten i bild, blank av plast eller dåligt belyst.
-  hints.set(DecodeHintType.TRY_HARDER, true);
-  return hints;
-}
-
 export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
@@ -38,6 +27,7 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   const [stuck, setStuck] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoInfo, setPhotoInfo] = useState<string | null>(null);
   // Vad kameran faktiskt gav oss. Utan detta går det inte att skilja
   // "kameran startade aldrig" från "kameran går men koden är för liten i bild".
   const [diag, setDiag] = useState<{
@@ -189,21 +179,24 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   async function decodePhoto(file: File) {
     setPhotoBusy(true);
     setPhotoError(null);
-    const url = URL.createObjectURL(file);
     try {
-      const reader = new BrowserMultiFormatReader(scannerHints());
-      const result = await reader.decodeFromImageUrl(url);
+      const { text, info } = await decodeImageFile(file);
+      setPhotoInfo(info);
+      if (!text) {
+        setPhotoError(
+          "Hittade ingen QR-kod i bilden. Ta om den så att koden fyller större " +
+            "delen av rutan och är skarp — och fotografera helst klistermärket " +
+            "på maskinen, inte en skärm.",
+        );
+        return;
+      }
       navigator.vibrate?.(60);
       doneRef.current = true;
       controlsRef.current?.stop();
-      onResult(result.getText());
+      onResult(text);
     } catch {
-      setPhotoError(
-        "Hittade ingen QR-kod i bilden. Ta om den närmare, så att koden fyller " +
-          "större delen av bilden och är skarp.",
-      );
+      setPhotoError("Kunde inte läsa bilden. Prova att ta ett nytt foto.");
     } finally {
-      URL.revokeObjectURL(url);
       setPhotoBusy(false);
     }
   }
@@ -352,6 +345,7 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
           </Row>
           <Row label="Kamera">{diag?.camera ?? "—"}</Row>
           {diag?.error && <Row label="Fel">{diag.error}</Row>}
+          {photoInfo && <Row label="Senaste foto">{photoInfo}</Row>}
         </dl>
       </details>
     </div>
