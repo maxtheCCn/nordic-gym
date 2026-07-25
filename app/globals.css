@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #07090c;
+  --color-surface: #101418;
+  --color-surface-2: #171d23;
+  --color-line: #232c34;
+  --color-muted: #8a97a4;
+  --color-brand: #00d95f;
+  --color-brand-dim: #0a7f3c;
+  --color-warn: #ffb020;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: #eef2f6;
+  font-family: var(--font-sans);
+  /* Gymmet = tummar. Ingen dubbeltapp-zoom, ingen horisontell scroll. */
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+}
+
+body {
+  /* Plats för den fasta bottennavigationen. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+/* Sifferfält ska inte ha spinnare — de är omöjliga att träffa med tummen. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@utility card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 1rem;
+}
+
+@utility tap {
+  /* Apples minsta rekommenderade träffyta. */
+  min-height: 44px;
+}
