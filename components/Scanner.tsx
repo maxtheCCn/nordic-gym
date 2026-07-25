@@ -24,6 +24,15 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [stuck, setStuck] = useState(false);
+  // Vad kameran faktiskt gav oss. Utan detta går det inte att skilja
+  // "kameran startade aldrig" från "kameran går men koden är för liten i bild".
+  const [diag, setDiag] = useState<{
+    attempt: string;
+    width?: number | null;
+    height?: number | null;
+    camera?: string;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,54 +49,98 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
       delayBetweenScanAttempts: 100,
     });
 
-    (async () => {
-      try {
-        const controls = await reader.decodeFromConstraints(
-          {
-            video: {
-              facingMode: { ideal: "environment" },
-              /*
-               * Utan detta ger Safari 640×480. En tät QR-kod på det avståndet
-               * man naturligt håller telefonen blir då bara ett par pixlar per
-               * modul och gick helt enkelt inte att avkoda — kameraappen
-               * klarade den, men inte vi. Full HD ger marginalen som behövs.
-               */
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-            },
-          },
-          videoRef.current!,
-          (result) => {
-            if (!result || doneRef.current) return;
-            doneRef.current = true;
-            navigator.vibrate?.(60);
-            controlsRef.current?.stop();
-            onResult(result.getText());
-          },
-        );
-        if (cancelled) {
-          controls.stop();
-          return;
-        }
-        controlsRef.current = controls;
+    /*
+     * Tre försök, från mest till minst kräsen. Ber man om full HD och kameran
+     * inte klarar exakt det svarar vissa enheter med OverconstrainedError i
+     * stället för att ge något sämre — då är det bättre att backa än att stå
+     * utan kamera helt.
+     */
+    const attempts: { label: string; video: MediaTrackConstraints }[] = [
+      {
+        label: "1920×1080 bakkamera",
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      },
+      {
+        label: "1280×720 bakkamera",
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      },
+      { label: "bakkamera utan krav", video: { facingMode: "environment" } },
+      { label: "valfri kamera", video: true as unknown as MediaTrackConstraints },
+    ];
 
-        const stream = videoRef.current?.srcObject as MediaStream | null;
-        const track = stream?.getVideoTracks()[0];
-        if (track && "torch" in (track.getCapabilities?.() ?? {})) {
-          setTorchAvailable(true);
-        }
-      } catch (e) {
+    (async () => {
+      let lastError: DOMException | null = null;
+
+      for (const attempt of attempts) {
         if (cancelled) return;
-        const err = e as DOMException;
-        setError(
-          err?.name === "NotAllowedError"
+        try {
+          const controls = await reader.decodeFromConstraints(
+            { video: attempt.video },
+            videoRef.current!,
+            (result) => {
+              if (!result || doneRef.current) return;
+              doneRef.current = true;
+              navigator.vibrate?.(60);
+              controlsRef.current?.stop();
+              onResult(result.getText());
+            },
+          );
+          if (cancelled) {
+            controls.stop();
+            return;
+          }
+          controlsRef.current = controls;
+
+          const stream = videoRef.current?.srcObject as MediaStream | null;
+          const track = stream?.getVideoTracks()[0];
+          const settings = track?.getSettings?.();
+          setDiag({
+            attempt: attempt.label,
+            width: settings?.width ?? null,
+            height: settings?.height ?? null,
+            camera: settings?.facingMode ?? track?.label ?? "okänd",
+          });
+          if (track && "torch" in (track.getCapabilities?.() ?? {})) {
+            setTorchAvailable(true);
+          }
+          return;
+        } catch (e) {
+          lastError = e as DOMException;
+          // NotAllowedError är ett nej från användaren eller systemet —
+          // att försöka igen med lägre krav ändrar ingenting.
+          if (lastError?.name === "NotAllowedError") break;
+        }
+      }
+
+      if (cancelled) return;
+
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as { standalone?: boolean }).standalone === true;
+
+      setDiag({
+        attempt: "alla misslyckades",
+        error: `${lastError?.name ?? "Okänt fel"}: ${lastError?.message ?? ""}`,
+      });
+
+      setError(
+        lastError?.name === "NotAllowedError" && standalone
+          ? "Kameran blockeras när appen körs från hemskärmen. Öppna sidan i Safari i stället — där fungerar skanningen."
+          : lastError?.name === "NotAllowedError"
             ? "Kameran är blockerad. Tillåt kameraåtkomst för sidan i webbläsarens inställningar."
-            : err?.name === "NotFoundError"
+            : lastError?.name === "NotFoundError"
               ? "Ingen kamera hittades på enheten."
               : "Kunde inte starta kameran. Kontrollera att sidan körs över https.",
-        );
-        setShowManual(true);
-      }
+      );
+      setShowManual(true);
     })();
 
     // Låser sig avkodningen ska man få ett konkret råd, inte stirra på en
@@ -187,6 +240,53 @@ export function Scanner({ onResult }: { onResult: (raw: string) => void }) {
           Skanningen fungerar inte — skriv in manuellt
         </Button>
       )}
+
+      {/* Gör felsökning möjlig utan att koppla in telefonen i en dator. */}
+      <details className="card px-4 py-3 text-xs text-muted">
+        <summary className="cursor-pointer font-semibold text-white">
+          Teknisk info
+        </summary>
+        <dl className="mt-2 space-y-1">
+          <Row label="Läge">
+            {typeof window !== "undefined" &&
+            (window.matchMedia("(display-mode: standalone)").matches ||
+              (window.navigator as { standalone?: boolean }).standalone === true)
+              ? "Hemskärm (standalone)"
+              : "Webbläsare"}
+          </Row>
+          <Row label="Säker anslutning">
+            {typeof window !== "undefined" && window.isSecureContext
+              ? "ja (https)"
+              : "NEJ — kameran kräver https"}
+          </Row>
+          <Row label="Kamera-API">
+            {typeof navigator !== "undefined" && navigator.mediaDevices
+              ? "finns"
+              : "SAKNAS"}
+          </Row>
+          <Row label="Försök">{diag?.attempt ?? "startar…"}</Row>
+          <Row label="Upplösning">
+            {diag?.width ? `${diag.width}×${diag.height}` : "—"}
+          </Row>
+          <Row label="Kamera">{diag?.camera ?? "—"}</Row>
+          {diag?.error && <Row label="Fel">{diag.error}</Row>}
+        </dl>
+      </details>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt>{label}</dt>
+      <dd className="text-right font-medium text-white">{children}</dd>
     </div>
   );
 }
