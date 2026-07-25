@@ -10,7 +10,10 @@ extern AI för analys.
 
 ## Kom igång
 
+Alla npm-kommandon måste köras i projektmappen, inte i din hemmapp:
+
 ```bash
+cd C:\Users\maxen\nordic-gym
 npm install
 npm run dev
 ```
@@ -66,12 +69,18 @@ Skillnaden är `basePath`. På GitHub Pages ligger sidan i en undermapp, så all
 länkar och tillgångar måste prefixas — annars laddas ingenting. `build:pages`
 sätter `NEXT_PUBLIC_BASE_PATH` åt dig (se `scripts/build-pages.mjs`).
 
-Uppdatera den publicerade sidan:
+Uppdatera den publicerade sidan — bygger och pushar i ett steg:
 
 ```bash
-npm run build:pages
-git subtree push --prefix out origin gh-pages   # eller pusha out/ till gh-pages
+cd C:\Users\maxen\nordic-gym    # kommandona måste köras i projektmappen
+npm run deploy
 ```
+
+`git subtree push --prefix out` fungerar **inte** här: `out/` ligger i
+`.gitignore` och är alltså inte incheckad, och subtree kräver att mappen finns i
+historiken. `npm run deploy` gör i stället `out/` till ett engångsrepo och
+tvingar upp det till `gh-pages` (se `scripts/deploy-pages.mjs`). Grenen
+innehåller bara bygget — källkoden bor kvar på `main`.
 
 `public/.nojekyll` måste följa med — utan den kastar GitHub Pages bort hela
 `_next`-mappen, eftersom Jekyll ignorerar kataloger som börjar med understreck.

@@ -8,3 +8,4 @@ next-env.d.ts
 build.log
 install.log
 dev.log
+deploy.log
