@@ -47,18 +47,34 @@ Baksidan: rensar du webbläsardata försvinner loggen. Under **Inställningar �
 Din data** finns export till JSON-fil och import tillbaka. Importen slår ihop
 data i stället för att skriva över, så det går att flytta mellan telefoner.
 
-## Deploya gratis
+## Live
+
+**https://maxtheccn.github.io/nordic-gym/**
+
+Lägg till den på hemskärmen så körs den i helskärm som en vanlig app.
+
+## Deploya
 
 Appen byggs till statiska filer (`output: "export"`) och behöver ingen server.
 
 ```bash
-npm run build      # skapar out/
+npm run build         # för hosting på roten (Vercel, Netlify, egen mapp)
+npm run build:pages   # för GitHub Pages, där sidan ligger under /nordic-gym
 ```
 
-Lägg upp `out/` var som helst — Vercel, Netlify, Cloudflare Pages och GitHub
-Pages har alla gratisnivåer som räcker mer än väl. Efter deploy kan du lägga
-till appen på hemskärmen; den har manifest och körs i helskärm som en vanlig
-app.
+Skillnaden är `basePath`. På GitHub Pages ligger sidan i en undermapp, så alla
+länkar och tillgångar måste prefixas — annars laddas ingenting. `build:pages`
+sätter `NEXT_PUBLIC_BASE_PATH` åt dig (se `scripts/build-pages.mjs`).
+
+Uppdatera den publicerade sidan:
+
+```bash
+npm run build:pages
+git subtree push --prefix out origin gh-pages   # eller pusha out/ till gh-pages
+```
+
+`public/.nojekyll` måste följa med — utan den kastar GitHub Pages bort hela
+`_next`-mappen, eftersom Jekyll ignorerar kataloger som börjar med understreck.
 
 ## Kod
 
