@@ -29,6 +29,17 @@ body {
 }
 
 body {
+  /*
+   * Tillagd på hemskärmen på iPhone körs appen kant till kant under
+   * statusraden (viewport-fit=cover + genomskinlig statusrad). Utan de här
+   * marginalerna hamnar sidans rubrik bakom klockan och batteriet, och i
+   * liggande läge bakom kameraurtaget.
+   *
+   * env() är 0 i vanliga webbläsare, så desktop och Android påverkas inte.
+   */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   /* Plats för den fasta bottennavigationen. */
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }

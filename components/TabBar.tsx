@@ -14,7 +14,10 @@ export function TabBar() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/95 backdrop-blur">
+    // Fast placerad, så body:ns säkerhetsmarginaler når inte hit: nedre
+    // marginalen håller knapparna ovanför iPhones hemindikator, sidmarginalerna
+    // undan kameraurtaget i liggande läge.
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/95 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur">
       <div className="mx-auto flex max-w-md pb-[env(safe-area-inset-bottom)]">
         {TABS.map((tab) => {
           const active =
