@@ -78,6 +78,13 @@ export interface Machine {
   plateOptions: number[];
   /** Minsta viktsteg på stacken, i kg. Styr +/- knapparna. */
   weightStep: number;
+  /**
+   * Hur många set man brukar köra på maskinen. Styr "Set 2 av 3" på
+   * loggningssidan och följer med i AI-rapporten som planerat upplägg.
+   * Odefinierat på maskiner som lagts till innan fältet fanns — då visas
+   * ingen målräkning.
+   */
+  targetSets?: number;
   note?: string;
   createdAt: number;
 }

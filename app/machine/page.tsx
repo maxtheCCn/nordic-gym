@@ -183,6 +183,37 @@ function PreviousCard({
   );
 }
 
+/**
+ * Prickar för genomförda set mot målet.
+ *
+ * Ska gå att uppfatta med en blick mitt i ett pass, utan att läsa siffror —
+ * därav prickar i stället för bara text.
+ */
+function SetProgress({ done, target }: { done: number; target: number }) {
+  const complete = done >= target;
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex gap-1.5">
+        {Array.from({ length: Math.max(target, done) }, (_, i) => (
+          <span
+            key={i}
+            className={`h-2.5 w-2.5 rounded-full ${
+              i < done
+                ? "bg-brand"
+                : "border border-line bg-surface-2"
+            }`}
+          />
+        ))}
+      </div>
+      {complete && (
+        <span className="text-sm font-semibold text-brand">
+          {done > target ? `${done} set — över målet` : "Klart"}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Räknar upp sedan senaste setet, så man vet när det är dags igen. */
 function RestTimer({ lastAt }: { lastAt?: number }) {
   useTicker(Boolean(lastAt));
@@ -261,7 +292,12 @@ function SetForm({
   return (
     <section className="mt-5 space-y-5">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-bold">Set {nextSetNumber}</h2>
+        <h2 className="text-lg font-bold">
+          Set {nextSetNumber}
+          {machine.targetSets && (
+            <span className="font-medium text-muted"> av {machine.targetSets}</span>
+          )}
+        </h2>
         {has("weight") && total > 0 && (
           <p className="text-sm text-muted">
             Totalt{" "}
@@ -271,6 +307,10 @@ function SetForm({
           </p>
         )}
       </div>
+
+      {machine.targetSets && (
+        <SetProgress done={nextSetNumber - 1} target={machine.targetSets} />
+      )}
 
       {has("weight") && (
         <Field label="Vikt">

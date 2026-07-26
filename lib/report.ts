@@ -179,7 +179,9 @@ export function buildReport(
     out.push("MASKINER JAG ANVÄNDER");
     out.push("");
     for (const m of data.machines) {
-      out.push(`${m.name} — ${m.muscleGroup} — ${gymName(m.gymId)}`);
+      // Målet säger vad jag brukar planera, mot vad jag faktiskt gjort ovan.
+      const target = m.targetSets ? ` — brukar köra ${m.targetSets} set` : "";
+      out.push(`${m.name} — ${m.muscleGroup} — ${gymName(m.gymId)}${target}`);
     }
     out.push("");
   }

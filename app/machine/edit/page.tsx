@@ -9,6 +9,7 @@ import {
   SectionTitle,
   Select,
   Spinner,
+  Stepper,
   TextInput,
 } from "@/components/ui";
 import { deleteMachine, ensureGym, saveMachine } from "@/lib/db";
@@ -55,6 +56,7 @@ function EditMachineForm() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [plates, setPlates] = useState<number[]>([]);
   const [weightStep, setWeightStep] = useState(2.5);
+  const [targetSets, setTargetSets] = useState(3);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -67,6 +69,7 @@ function EditMachineForm() {
     setMetrics(machine.metrics);
     setPlates(machine.plateOptions);
     setWeightStep(machine.weightStep);
+    setTargetSets(machine.targetSets ?? 3);
     setReady(true);
   }, [machine, data.gyms, ready]);
 
@@ -94,6 +97,7 @@ function EditMachineForm() {
       metrics,
       plateOptions: [...plates].sort((a, b) => a - b),
       weightStep,
+      targetSets,
     });
     router.replace(`/machine?id=${machine.id}`);
   }
@@ -218,6 +222,15 @@ function EditMachineForm() {
           </Field>
         </div>
       )}
+
+      <div className="mt-5">
+        <Field
+          label="Antal set du brukar köra"
+          hint="Visas som “Set 2 av 3” när du loggar."
+        >
+          <Stepper value={targetSets} onChange={setTargetSets} min={1} max={20} />
+        </Field>
+      </div>
 
       <Button type="submit" size="lg" className="mt-6 w-full">
         Spara ändringar

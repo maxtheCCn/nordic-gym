@@ -9,6 +9,7 @@ import {
   SectionTitle,
   Select,
   Spinner,
+  Stepper,
   TextInput,
 } from "@/components/ui";
 import { ensureGym, normalizeQr, saveMachine, saveProfile } from "@/lib/db";
@@ -55,6 +56,7 @@ function NewMachineForm() {
   const [metrics, setMetrics] = useState<Metric[]>(DEFAULT_METRICS.strength);
   const [plates, setPlates] = useState<number[]>([2.5, 3.75, 5]);
   const [weightStep, setWeightStep] = useState(2.5);
+  const [targetSets, setTargetSets] = useState(3);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +100,7 @@ function NewMachineForm() {
         metrics,
         plateOptions: [...plates].sort((a, b) => a - b),
         weightStep,
+        targetSets,
       });
       // Första gymmet blir automatiskt hemmagym.
       if (!data.profile.homeGymId) await saveProfile({ homeGymId: gym.id });
@@ -249,6 +252,15 @@ function NewMachineForm() {
           </Field>
         </div>
       )}
+
+      <div className="mt-5">
+        <Field
+          label="Antal set du brukar köra"
+          hint="Visas som “Set 2 av 3” när du loggar. Går att ändra när som helst."
+        >
+          <Stepper value={targetSets} onChange={setTargetSets} min={1} max={20} />
+        </Field>
+      </div>
 
       {qrRaw && (
         <p className="mt-5 break-all rounded-xl border border-line bg-surface px-3.5 py-3 text-xs text-muted">
