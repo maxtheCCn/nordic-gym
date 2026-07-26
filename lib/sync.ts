@@ -1,7 +1,8 @@
 "use client";
 
-import { getMeta, setMeta } from "./db";
+import { DB_VERSION, getMeta, setMeta } from "./db";
 import { openDB, type IDBPDatabase } from "idb";
+import { databaseName } from "./demo";
 import { supabase } from "./supabase";
 
 /** Lokalt lagringsnamn ↔ `kind` i databasen på servern. */
@@ -11,6 +12,7 @@ const KINDS = {
   sessions: "session",
   sets: "set",
   profile: "profile",
+  plans: "plan",
 } as const;
 
 type StoreName = keyof typeof KINDS;
@@ -24,9 +26,9 @@ interface RemoteRow {
   deleted_at: number | null;
 }
 
-/** Öppnar samma databas som db.ts. Versionen måste hållas i takt. */
+/** Öppnar samma databas som db.ts. Namn och version måste hållas i takt. */
 function raw(): Promise<IDBPDatabase> {
-  return openDB("nordic-gym", 2);
+  return openDB(databaseName(), DB_VERSION);
 }
 
 export interface SyncResult {

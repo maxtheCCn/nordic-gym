@@ -1,10 +1,18 @@
 "use client";
 
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import {
+  openDB,
+  type DBSchema,
+  type IDBPDatabase,
+  type StoreNames,
+} from "idb";
+import { databaseName, demoSeed, isDemo } from "./demo";
 import type {
   Backup,
   Gym,
   Machine,
+  Plan,
+  PlanImport,
   Profile,
   Session,
   SetEntry,
@@ -24,9 +32,19 @@ interface NordicDB extends DBSchema {
     indexes: { bySession: string; byMachine: string; byTime: number };
   };
   profile: { key: string; value: Profile };
+  /** Rekommenderade pass — skrivna utanför appen, lagrade här. */
+  plans: { key: string; value: Plan };
   /** Småsaker som inte hör hemma i loggen, t.ex. tidpunkt för senaste synk. */
   meta: { key: string; value: { key: string; value: unknown } };
 }
+
+/**
+ * Höj den här när ett nytt lager eller index behövs.
+ *
+ * Exporteras så att sync.ts öppnar samma version — öppnar två delar av appen
+ * databasen med olika versionsnummer blockerar de varandra.
+ */
+export const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<NordicDB>> | null = null;
 
@@ -35,29 +53,45 @@ function getDb() {
     throw new Error("Databasen finns bara i webbläsaren");
   }
   if (!dbPromise) {
-    dbPromise = openDB<NordicDB>("nordic-gym", 2, {
-      upgrade(db, oldVersion) {
-        if (oldVersion < 1) {
-          db.createObjectStore("gyms", { keyPath: "id" });
+    // I demoläget öppnas en helt annan databas, så inget kan blandas ihop.
+    dbPromise = openDB<NordicDB>(databaseName(), DB_VERSION, {
+      /*
+       * Migreringen utgår från vad som faktiskt finns, inte från vilket
+       * versionsnummer databasen påstår sig ha.
+       *
+       * Med rena versionsjämförelser räcker det att versionen hinner skrivas
+       * upp utan att lagret skapas — vid ett avbrutet bygge eller en
+       * omladdning mitt i en ändring — för att databasen ska bli permanent
+       * trasig: nästa öppning ser rätt version och hoppar över steget. Med
+       * `contains` läker den sig själv i stället.
+       */
+      upgrade(db) {
+        const need = (name: StoreNames<NordicDB>) =>
+          !db.objectStoreNames.contains(name);
 
+        if (need("gyms")) db.createObjectStore("gyms", { keyPath: "id" });
+
+        if (need("machines")) {
           const machines = db.createObjectStore("machines", { keyPath: "id" });
           machines.createIndex("byQrKey", "qrKey", { unique: true });
           machines.createIndex("byGym", "gymId");
+        }
 
+        if (need("sessions")) {
           const sessions = db.createObjectStore("sessions", { keyPath: "id" });
           sessions.createIndex("byStart", "startedAt");
+        }
 
+        if (need("sets")) {
           const sets = db.createObjectStore("sets", { keyPath: "id" });
           sets.createIndex("bySession", "sessionId");
           sets.createIndex("byMachine", "machineId");
           sets.createIndex("byTime", "timestamp");
-
-          db.createObjectStore("profile", { keyPath: "id" });
         }
 
-        if (oldVersion < 2) {
-          db.createObjectStore("meta", { keyPath: "key" });
-        }
+        if (need("profile")) db.createObjectStore("profile", { keyPath: "id" });
+        if (need("meta")) db.createObjectStore("meta", { keyPath: "key" });
+        if (need("plans")) db.createObjectStore("plans", { keyPath: "id" });
       },
       /*
        * Den här fliken håller en äldre version öppen medan en annan flik vill
@@ -82,6 +116,7 @@ function getDb() {
     }).then(async (db) => {
       await backfillTimestamps(db);
       await repairSetNumbers(db);
+      await seedDemoIfEmpty(db);
       return db;
     });
   }
@@ -151,6 +186,32 @@ async function repairSetNumbers(db: IDBPDatabase<NordicDB>): Promise<void> {
   }
 
   await db.put("meta", { key: "repairedSetNumbers", value: true });
+}
+
+/**
+ * Fyller demodatabasen med exempeldata första gången den öppnas.
+ *
+ * Utan innehåll är demot meningslöst — statistik, historik och rapport skulle
+ * alla vara tomma, och det är just de sidorna man vill titta på. Körs bara när
+ * databasen är tom, så det man själv petar på i demot blir kvar.
+ */
+async function seedDemoIfEmpty(db: IDBPDatabase<NordicDB>): Promise<void> {
+  if (!isDemo()) return;
+  if ((await db.count("machines")) > 0) return;
+
+  const seed = demoSeed();
+  const tx = db.transaction(
+    ["gyms", "machines", "sessions", "sets", "profile"],
+    "readwrite",
+  );
+  await Promise.all([
+    ...seed.gyms.map((g) => tx.objectStore("gyms").put(g)),
+    ...seed.machines.map((m) => tx.objectStore("machines").put(m)),
+    ...seed.sessions.map((s) => tx.objectStore("sessions").put(s)),
+    ...seed.sets.map((s) => tx.objectStore("sets").put(s)),
+    tx.objectStore("profile").put(seed.profile),
+    tx.done,
+  ]);
 }
 
 /** Stämplar en post som ändrad nu. All skrivning går genom den här. */
@@ -528,6 +589,58 @@ async function renumberSets(
     if (siblings[i].setNumber === i + 1) continue;
     await db.put("sets", { ...siblings[i], setNumber: i + 1, updatedAt: now });
   }
+}
+
+/* ------------------------------------------------ rekommenderade pass */
+
+export async function listPlans(): Promise<Plan[]> {
+  const db = await getDb();
+  return alive(await db.getAll("plans")).sort((a, b) =>
+    a.name.localeCompare(b.name, "sv"),
+  );
+}
+
+/**
+ * Lägger till pass från en inklistrad plan.
+ *
+ * Pass med samma namn ersätts. Får man en uppdaterad version av "Pass A" ska
+ * den ta över, inte hamna bredvid den gamla — annars vet man inte vilken som
+ * gäller när man står vid maskinen.
+ */
+export async function importPlans(input: PlanImport): Promise<number> {
+  if (input?.format !== "nw-plan" || !Array.isArray(input.plans)) {
+    throw new Error(
+      "Texten är inte ett giltigt pass. Kopiera hela blocket du fick, inklusive klamrarna.",
+    );
+  }
+  const db = await getDb();
+  const existing = alive(await db.getAll("plans"));
+
+  for (const incoming of input.plans) {
+    if (!incoming?.name || !Array.isArray(incoming.exercises)) continue;
+    const previous = existing.find(
+      (p) => p.name.toLowerCase() === incoming.name.toLowerCase(),
+    );
+    await db.put(
+      "plans",
+      touch({
+        id: previous?.id ?? newId(),
+        name: incoming.name,
+        note: incoming.note,
+        exercises: incoming.exercises,
+        createdAt: previous?.createdAt ?? Date.now(),
+        deletedAt: null,
+      }),
+    );
+  }
+  return input.plans.length;
+}
+
+export async function deletePlan(id: string): Promise<void> {
+  const db = await getDb();
+  const plan = await db.get("plans", id);
+  if (!plan) return;
+  await db.put("plans", touch({ ...plan, deletedAt: Date.now() }));
 }
 
 /* --------------------------------------------------------- export/import */

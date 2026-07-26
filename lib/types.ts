@@ -160,6 +160,40 @@ export interface Profile extends Synced {
   restTimer?: boolean;
 }
 
+/**
+ * En övning i ett rekommenderat pass.
+ *
+ * Maskinen pekas ut med namn, inte id: planen skrivs utifrån en
+ * träningsrapport, där bara namnen finns. Appen slår upp namnet mot dina
+ * maskiner när passet visas.
+ */
+export interface PlanExercise {
+  machine: string;
+  sets?: number;
+  reps?: number;
+  /** Målvikt i kg, inklusive eventuell extraplatta. */
+  weight?: number;
+  note?: string;
+}
+
+export interface Plan extends Synced {
+  id: string;
+  name: string;
+  note?: string;
+  exercises: PlanExercise[];
+  createdAt: number;
+}
+
+/** Formen på filen man klistrar in för att lägga till pass. */
+export interface PlanImport {
+  format: "nw-plan";
+  plans: {
+    name: string;
+    note?: string;
+    exercises: PlanExercise[];
+  }[];
+}
+
 /** Formen på export/import-filen. */
 export interface Backup {
   format: "nordic-gym";

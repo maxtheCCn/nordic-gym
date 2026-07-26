@@ -14,6 +14,7 @@ import {
   TextInput,
 } from "@/components/ui";
 import { SyncPanel } from "@/components/SyncPanel";
+import { enterDemo, exitDemo, isDemo, resetDemoData } from "@/lib/demo";
 import { clearAll, exportBackup, importBackup, saveProfile } from "@/lib/db";
 import { useData } from "@/lib/useData";
 import { GOALS, type Goal } from "@/lib/types";
@@ -27,6 +28,9 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  // Läses efter montering — localStorage finns inte när sidan byggs statiskt.
+  const [demoOn, setDemoOn] = useState(false);
+  useEffect(() => setDemoOn(isDemo()), []);
 
   useEffect(() => {
     if (loading || hydrated) return;
@@ -142,6 +146,40 @@ export default function SettingsPage() {
         )}
       </div>
 
+      <SectionTitle>Demoläge</SectionTitle>
+      {demoOn ? (
+        <div className="card space-y-3 p-4">
+          <p className="text-sm text-muted">
+            Du är i demoläget. Allt du gör här sparas i en separat databas och
+            rör aldrig din riktiga träningslogg.
+          </p>
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={exitDemo}>
+              Avsluta demo
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                await resetDemoData();
+                window.location.reload();
+              }}
+            >
+              Nollställ
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="card space-y-3 p-4">
+          <p className="text-sm text-muted">
+            Prova appen fritt med påhittad träningsdata — skanna, logga, radera,
+            titta på statistik. Din riktiga logg påverkas inte alls.
+          </p>
+          <Button className="w-full" onClick={enterDemo}>
+            Starta demo
+          </Button>
+        </div>
+      )}
+
       <SectionTitle>Under passet</SectionTitle>
       <div className="card p-4">
         <Field
@@ -196,6 +234,15 @@ export default function SettingsPage() {
       </div>
 
       <SyncPanel onSynced={reload} />
+
+      <SectionTitle>Rekommenderade pass</SectionTitle>
+      <LinkButton href="/plan" variant="primary" className="w-full">
+        Visa rekommenderat pass
+      </LinkButton>
+      <p className="mt-2 text-xs text-muted">
+        Skicka din träningsrapport och klistra in passet du får tillbaka. Då kan
+        du följa det övning för övning, med målvikter.
+      </p>
 
       {/* ---------------------------------------------------------- rapport */}
       <SectionTitle>AI-analys</SectionTitle>
