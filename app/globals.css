@@ -44,6 +44,149 @@ body {
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
+/* ----------------------------------------------------------- introanimation
+ *
+ * Hanteln byggs upp del för del, ett ljus sveper över den, och hela märket
+ * skalas upp och tonar bort. Hela sekvensen är 1,65 s.
+ *
+ * Allt animeras med transform och opacity, som webbläsaren kan köra på
+ * grafikkortet — på en telefon som just vaknat är det skillnaden mellan mjukt
+ * och hackigt.
+ *
+ * Viktigt: sista bildrutan är opacity 0 och visibility hidden med `forwards`.
+ * Skulle JavaScript aldrig hinna ta bort elementet försvinner det ändå och
+ * blockerar inte appen.
+ */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  background: var(--color-ink);
+  animation: splash-out 0.5s cubic-bezier(0.4, 0, 1, 1) 1.15s forwards;
+}
+
+.splash-stage {
+  position: relative;
+  width: min(56vw, 15rem);
+  overflow: hidden;
+}
+
+.splash-mark {
+  display: block;
+  width: 100%;
+}
+
+.splash-mark path {
+  /* Utan detta räknas transform-origin mot hela SVG-ytan, inte varje streck. */
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.splash-bar {
+  animation: splash-grow-x 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.splash-plate-inner {
+  animation: splash-grow-y 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.28s both;
+}
+
+.splash-plate-outer {
+  animation: splash-grow-y 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.42s both;
+}
+
+/* Ljusstrimman som sveper över märket när det är färdigbyggt. */
+.splash-sweep {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, var(--color-brand) 55%, white) 50%,
+    transparent
+  );
+  opacity: 0;
+  filter: blur(6px);
+  animation: splash-sweep 0.45s ease-in 0.6s both;
+}
+
+.splash-word {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  /* Bokstavsavståndet lägger till luft efter sista tecknet — kompensera. */
+  text-indent: 0.42em;
+  color: var(--color-muted);
+  animation: splash-word 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both;
+}
+
+@keyframes splash-grow-x {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-grow-y {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-sweep {
+  from {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(320%);
+  }
+}
+
+@keyframes splash-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-out {
+  to {
+    opacity: 0;
+    transform: scale(1.12);
+    visibility: hidden;
+  }
+}
+
+/* Har man bett systemet om mindre rörelse ska ingen intro visas alls. */
+@media (prefers-reduced-motion: reduce) {
+  .splash {
+    display: none;
+  }
+}
+
 /* Sifferfält ska inte ha spinnare — de är omöjliga att träffa med tummen. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
