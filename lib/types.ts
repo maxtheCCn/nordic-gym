@@ -153,6 +153,11 @@ export interface Profile extends Synced {
   goal?: Goal;
   /** Gymmet som väljs automatiskt när ett nytt pass startas. */
   homeGymId?: string;
+  /**
+   * Visa vilotimern som räknar upp efter varje sparat set.
+   * Odefinierat betyder på — den fanns innan inställningen gjorde det.
+   */
+  restTimer?: boolean;
 }
 
 /** Formen på export/import-filen. */

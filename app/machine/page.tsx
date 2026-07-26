@@ -33,6 +33,12 @@ function MachineLogger() {
   const params = useSearchParams();
   const machineId = params.get("id") ?? "";
   const { data, loading, error, reload } = useData();
+  /*
+   * Tidsstämpeln för det set vars vila man tryckt bort. Sparas som stämpel och
+   * inte som en boolean, så att timern kommer tillbaka av sig själv vid nästa
+   * set — man vill dölja *den här* vilan, inte stänga av funktionen.
+   */
+  const [dismissedRest, setDismissedRest] = useState<number | null>(null);
 
   const machine = data.machines.find((m) => m.id === machineId);
   const gym = data.gyms.find((g) => g.id === machine?.gymId);
@@ -64,6 +70,8 @@ function MachineLogger() {
       )
       .sort((a, b) => a.timestamp - b.timestamp);
   }, [data.sets, data.activeSession, machine]);
+
+  const lastSetAt = todaySets[todaySets.length - 1]?.timestamp;
 
   if (loading || error) return <Spinner error={error} />;
 
@@ -99,7 +107,14 @@ function MachineLogger() {
       />
 
       <PreviousCard previous={previous} setCount={previousSetCount} />
-      <RestTimer lastAt={todaySets[todaySets.length - 1]?.timestamp} />
+      {data.profile.restTimer !== false && (
+        <RestTimer
+          lastAt={
+            lastSetAt && lastSetAt !== dismissedRest ? lastSetAt : undefined
+          }
+          onDismiss={() => setDismissedRest(lastSetAt ?? null)}
+        />
+      )}
 
       <SetForm
         machine={machine}
@@ -214,19 +229,41 @@ function SetProgress({ done, target }: { done: number; target: number }) {
   );
 }
 
-/** Räknar upp sedan senaste setet, så man vet när det är dags igen. */
-function RestTimer({ lastAt }: { lastAt?: number }) {
+/**
+ * Räknar upp sedan senaste setet, så man vet när det är dags igen.
+ *
+ * Går att stänga med ett tryck. Är man klar med övningen och på väg till nästa
+ * maskin fyller den ingen funktion, och tidigare fanns inget sätt att bli av
+ * med den annat än att spara ännu ett set.
+ */
+function RestTimer({
+  lastAt,
+  onDismiss,
+}: {
+  lastAt?: number;
+  onDismiss: () => void;
+}) {
   useTicker(Boolean(lastAt));
   if (!lastAt) return null;
   const seconds = (Date.now() - lastAt) / 1000;
   if (seconds > 900) return null; // Efter 15 min är det ingen vila längre.
   return (
-    <p className="mt-3 text-center text-sm text-muted">
-      Vila:{" "}
-      <span className="font-bold tabular-nums text-white">
-        {formatDuration(seconds)}
-      </span>
-    </p>
+    <div className="mt-3 flex items-center justify-center gap-2">
+      <p className="text-sm text-muted">
+        Vila:{" "}
+        <span className="font-bold tabular-nums text-white">
+          {formatDuration(seconds)}
+        </span>
+      </p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dölj vilotimern"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted active:bg-surface-2"
+      >
+        ✕
+      </button>
+    </div>
   );
 }
 

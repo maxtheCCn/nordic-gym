@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   Button,
+  ChipGroup,
   Field,
   LinkButton,
   PageHeader,
@@ -139,6 +140,20 @@ export default function SettingsPage() {
             </Select>
           </Field>
         )}
+      </div>
+
+      <SectionTitle>Under passet</SectionTitle>
+      <div className="card p-4">
+        <Field
+          label="Vilotimer"
+          hint="Räknar upp tiden sedan ditt senaste set. Går alltid att trycka bort för stunden med ✕."
+        >
+          <ChipGroup
+            options={["På", "Av"]}
+            value={data.profile.restTimer === false ? "Av" : "På"}
+            onChange={(v) => persist({ restTimer: v === "På" })}
+          />
+        </Field>
       </div>
 
       {/* ---------------------------------------------------------- maskiner */}
