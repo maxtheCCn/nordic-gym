@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { EmptyState, LinkButton, PageHeader, Spinner } from "@/components/ui";
 import { formatClock, formatDate, formatMinutes } from "@/lib/format";
-import { sessionMinutes } from "@/lib/stats";
+import { sessionMinutes, sessionsWithSets } from "@/lib/stats";
 import { useData } from "@/lib/useData";
 
 export default function HistoryPage() {
@@ -16,17 +16,22 @@ export default function HistoryPage() {
     [machines],
   );
 
-  /** Passen grupperade per månad, nyast först. */
+  /** Passen grupperade per månad, nyast först. Tomma pass utelämnas. */
   const months = useMemo(() => {
     const groups = new Map<string, typeof sessions>();
-    for (const session of sessions) {
+    for (const session of sessionsWithSets(sessions, sets)) {
       const d = new Date(session.startedAt);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(session);
     }
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [sessions]);
+  }, [sessions, sets]);
+
+  const realSessionCount = useMemo(
+    () => months.reduce((sum, [, group]) => sum + group.length, 0),
+    [months],
+  );
 
   if (loading || error) return <Spinner error={error} />;
 
@@ -36,13 +41,13 @@ export default function HistoryPage() {
         title="Historik"
         back={false}
         subtitle={
-          sessions.length
-            ? `${sessions.length} pass · ${sets.length} set totalt`
+          realSessionCount
+            ? `${realSessionCount} pass · ${sets.length} set totalt`
             : undefined
         }
       />
 
-      {sessions.length === 0 ? (
+      {realSessionCount === 0 ? (
         <EmptyState
           title="Ingen historik än"
           body="När du sparar ditt första set startas ett pass automatiskt. Passet hamnar här när det är avslutat."

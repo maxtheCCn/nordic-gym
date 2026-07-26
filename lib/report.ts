@@ -5,7 +5,14 @@ import {
   formatMinutes,
   formatNumber,
 } from "./format";
-import { buildStats, filterByDays, sessionMinutes, setWeight, type Dataset } from "./stats";
+import {
+  buildStats,
+  filterByDays,
+  sessionMinutes,
+  sessionsWithSets,
+  setWeight,
+  type Dataset,
+} from "./stats";
 import type { Gym, Profile, SetEntry } from "./types";
 
 export interface ReportOptions {
@@ -122,12 +129,17 @@ export function buildReport(
   if (includeSessions && scoped.sessions.length) {
     out.push("TRÄNINGSPASS I DETALJ");
     out.push("");
-    const ordered = [...scoped.sessions].sort((a, b) => b.startedAt - a.startedAt);
+    // Tomma pass utelämnas — de säger inget om träningen och gör bara
+    // rapporten svårare att läsa för den som ska analysera den.
+    const ordered = sessionsWithSets(scoped.sessions, scoped.sets).sort(
+      (a, b) => b.startedAt - a.startedAt,
+    );
 
     for (const session of ordered) {
       const sets = scoped.sets
         .filter((s) => s.sessionId === session.id)
         .sort((a, b) => a.timestamp - b.timestamp);
+      if (sets.length === 0) continue;
 
       out.push(`--- ${formatDate(session.startedAt)} — ${gymName(session.gymId)}`);
       out.push(
@@ -139,12 +151,6 @@ export function buildReport(
             : " | pågår"),
       );
       if (session.note) out.push(`Anteckning: ${session.note}`);
-
-      if (sets.length === 0) {
-        out.push("Inga loggade set.");
-        out.push("");
-        continue;
-      }
 
       // Gruppera per maskin men behåll ordningen de utfördes i.
       const order: string[] = [];

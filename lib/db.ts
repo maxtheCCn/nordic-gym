@@ -81,6 +81,7 @@ function getDb() {
       },
     }).then(async (db) => {
       await backfillTimestamps(db);
+      await repairSetNumbers(db);
       return db;
     });
   }
@@ -120,6 +121,36 @@ async function backfillTimestamps(db: IDBPDatabase<NordicDB>): Promise<void> {
   }
 
   await db.put("meta", { key: "backfilledTimestamps", value: true });
+}
+
+/**
+ * Rättar setnummer som blev fel innan omnumreringen fanns.
+ *
+ * Tidigare lämnades kvarvarande set orörda när ett togs bort, så en logg kunde
+ * innehålla ett "Set 2" utan något Set 1. Körs en gång och rör bara numren.
+ */
+async function repairSetNumbers(db: IDBPDatabase<NordicDB>): Promise<void> {
+  const done = await db.get("meta", "repairedSetNumbers");
+  if (done) return;
+
+  const sets = alive(await db.getAll("sets"));
+  const groups = new Map<string, typeof sets>();
+  for (const s of sets) {
+    const key = `${s.sessionId}|${s.machineId}`;
+    const list = groups.get(key) ?? [];
+    list.push(s);
+    groups.set(key, list);
+  }
+
+  for (const list of groups.values()) {
+    list.sort((a, b) => a.timestamp - b.timestamp);
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].setNumber === i + 1) continue;
+      await db.put("sets", { ...list[i], setNumber: i + 1 });
+    }
+  }
+
+  await db.put("meta", { key: "repairedSetNumbers", value: true });
 }
 
 /** Stämplar en post som ändrad nu. All skrivning går genom den här. */
@@ -473,6 +504,30 @@ export async function deleteSet(id: string): Promise<void> {
   // Gravsten i stället för borttagning, annars kommer setet tillbaka vid
   // nästa synk från en enhet som inte känner till raderingen.
   await db.put("sets", touch({ ...set, deletedAt: Date.now() }));
+  await renumberSets(db, set.sessionId, set.machineId);
+}
+
+/**
+ * Numrerar om seten på en maskin inom ett pass, 1 och uppåt.
+ *
+ * Raderar man set 1 av tre skulle de kvarvarande annars heta 2 och 3, och
+ * loggen visa ett set nummer 2 som inget föregår. Numret ska beskriva
+ * ordningen man faktiskt gjorde dem i.
+ */
+async function renumberSets(
+  db: IDBPDatabase<NordicDB>,
+  sessionId: string,
+  machineId: string,
+): Promise<void> {
+  const siblings = alive(await db.getAllFromIndex("sets", "bySession", sessionId))
+    .filter((s) => s.machineId === machineId)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const now = Date.now();
+  for (let i = 0; i < siblings.length; i++) {
+    if (siblings[i].setNumber === i + 1) continue;
+    await db.put("sets", { ...siblings[i], setNumber: i + 1, updatedAt: now });
+  }
 }
 
 /* --------------------------------------------------------- export/import */

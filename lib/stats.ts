@@ -112,8 +112,28 @@ function streaks(sessions: Session[]): { longest: number; current: number } {
   return { longest, current };
 }
 
+/**
+ * Sållar bort pass utan innehåll.
+ *
+ * Raderar man sitt enda set blir passet kvar som ett tomt skal. Det räknades
+ * som ett fullvärdigt träningspass och drog ner både snittlängd och frekvens
+ * — ett pass man aldrig genomförde ska inte påverka statistiken.
+ *
+ * Pågående pass behålls oavsett, annars försvinner "Pågående pass" från
+ * startsidan i samma sekund som man ångrar sitt första set.
+ */
+export function sessionsWithSets(
+  sessions: Session[],
+  sets: SetEntry[],
+): Session[] {
+  const used = new Set(sets.map((s) => s.sessionId));
+  return sessions.filter((s) => used.has(s.id) || s.endedAt === null);
+}
+
 export function buildStats(data: Dataset, days: number): Stats {
-  const { sessions, sets, machines } = filterByDays(data, days);
+  const scoped = filterByDays(data, days);
+  const { sets, machines } = scoped;
+  const sessions = sessionsWithSets(scoped.sessions, scoped.sets);
   const machineById = new Map(machines.map((m) => [m.id, m]));
 
   const totalMinutes = sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
@@ -180,6 +200,21 @@ export function buildStats(data: Dataset, days: number): Stats {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([monthKey, v]) => ({ monthKey, ...v }));
 
+    /*
+     * Utvecklingen jämför bästa vikt per pass, inte första setet mot sista.
+     *
+     * Nästan alla drar av extraplattan på sista setet när orken tryter. Med
+     * råa första och sista set såg det ut som en tillbakagång — "30,75 → 27
+     * kg" — trots att passet var precis som planerat. Bästa vikt per pass är
+     * det som faktiskt säger något om utveckling.
+     */
+    const perSession = new Map<string, number>();
+    for (const s of own) {
+      const best = perSession.get(s.sessionId) ?? 0;
+      perSession.set(s.sessionId, Math.max(best, setWeight(s)));
+    }
+    const sessionBests = [...perSession.values()].filter((w) => w > 0);
+
     const weights = own.map(setWeight).filter((w) => w > 0);
     const bestSet = own.reduce(
       (best, s) => (setWeight(s) > setWeight(best) ? s : best),
@@ -189,8 +224,8 @@ export function buildStats(data: Dataset, days: number): Stats {
     progress.push({
       machine,
       points,
-      first: weights.length ? weights[0] : null,
-      latest: weights.length ? weights[weights.length - 1] : null,
+      first: sessionBests.length ? sessionBests[0] : null,
+      latest: sessionBests.length ? sessionBests[sessionBests.length - 1] : null,
       personalBest: weights.length ? Math.max(...weights) : null,
       personalBestReps: weights.length ? (bestSet.reps ?? null) : null,
       bestSetVolume: own.length ? Math.max(...own.map(setVolume)) : null,
