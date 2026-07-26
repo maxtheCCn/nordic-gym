@@ -47,10 +47,16 @@ function NewMachineForm() {
   const router = useRouter();
   const params = useSearchParams();
   const qrRaw = params.get("qr") ?? "";
+  /*
+   * Namnet kommer med från ett rekommenderat pass. Då vet vi redan vad
+   * maskinen ska heta, och namnet måste stämma exakt för att passets rad ska
+   * hitta den — låt inte användaren gissa sig till det.
+   */
+  const suggestedName = params.get("name") ?? "";
   const { data, loading, error: dataError } = useData();
 
   const [gymName, setGymName] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(suggestedName);
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup>("Bröst");
   const [type, setType] = useState<MachineType>("strength");
   const [metrics, setMetrics] = useState<Metric[]>(DEFAULT_METRICS.strength);
@@ -128,9 +134,11 @@ function NewMachineForm() {
       <PageHeader
         title="Ny maskin"
         subtitle={
-          qrRaw
-            ? "Koden är okänd — fyll i maskinen en gång så känns den igen sedan"
-            : "För löpband, bänkar och annat utan QR-kod. Du hittar den sedan under Välj maskin."
+          suggestedName
+            ? `Från ditt pass. Kontrollera att namnet stämmer med maskinen.`
+            : qrRaw
+              ? "Koden är okänd — fyll i maskinen en gång så känns den igen sedan"
+              : "För löpband, bänkar och annat utan QR-kod. Du hittar den sedan under Välj maskin."
         }
       />
 

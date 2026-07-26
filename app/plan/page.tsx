@@ -221,34 +221,31 @@ function ExerciseRow({
           <span className="mt-0.5 block text-xs text-muted">{exercise.note}</span>
         )}
       </span>
-      {machineId && <span className="shrink-0 text-muted">›</span>}
+      <span className="shrink-0 text-muted">›</span>
     </>
   );
 
-  // Saknas maskinen i loggen går raden inte att trycka på — då visas i
-  // stället vad man behöver göra först.
-  if (!machineId) {
-    return (
-      <li className="px-4 py-3.5">
-        <div className="flex items-center gap-3 opacity-60">{body}</div>
-        <Link
-          href="/machine/new"
-          className="mt-1 inline-block text-xs font-semibold text-brand"
-        >
-          Maskinen finns inte i loggen — lägg till den
-        </Link>
-      </li>
-    );
-  }
-
+  /*
+   * Raden leder till skannern, inte rakt till loggningen — även när maskinen
+   * redan finns. Skanningen är en kontroll att du står vid rätt maskin, och
+   * fångar att man råkar logga bänkpress på ett löpband. Saknas maskinen helt
+   * blir skanningen dessutom registreringen, med namnet från passet ifyllt.
+   *
+   * För stänger, bänkar och annat utan kod finns en väg förbi på skannersidan.
+   */
   return (
     <li>
       <Link
-        href={`/machine?id=${machineId}`}
+        href={`/scan?expect=${encodeURIComponent(exercise.machine)}`}
         className="flex items-center gap-3 px-4 py-3.5 active:bg-surface-2"
       >
         {body}
       </Link>
+      {!machineId && (
+        <p className="px-4 pb-3 text-xs text-muted">
+          Inte registrerad än — skanna den, eller välj “ingen QR-kod”.
+        </p>
+      )}
     </li>
   );
 }
