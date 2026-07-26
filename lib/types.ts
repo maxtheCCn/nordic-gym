@@ -57,13 +57,26 @@ export const DEFAULT_METRICS: Record<MachineType, Metric[]> = {
   free: ["weight", "reps"],
 };
 
-export interface Gym {
+/**
+ * Fälten synken behöver på varje post.
+ *
+ * `updatedAt` avgör vem som vinner när samma post ändrats på två enheter —
+ * senaste skrivningen gäller. `deletedAt` gör raderingar till gravstenar:
+ * en post som bara försvann lokalt skulle läsas tillbaka från servern vid
+ * nästa synk, så den måste finnas kvar och vara märkt borttagen.
+ */
+export interface Synced {
+  updatedAt: number;
+  deletedAt?: number | null;
+}
+
+export interface Gym extends Synced {
   id: string;
   name: string;
   createdAt: number;
 }
 
-export interface Machine {
+export interface Machine extends Synced {
   id: string;
   /** Normaliserad QR-sträng. Unikt index — det är så maskinen känns igen. */
   qrKey: string;
@@ -89,7 +102,7 @@ export interface Machine {
   createdAt: number;
 }
 
-export interface Session {
+export interface Session extends Synced {
   id: string;
   gymId: string;
   startedAt: number;
@@ -98,7 +111,7 @@ export interface Session {
   note?: string;
 }
 
-export interface SetEntry {
+export interface SetEntry extends Synced {
   id: string;
   sessionId: string;
   machineId: string;
@@ -132,7 +145,7 @@ export const GOALS: Goal[] = [
   "Hålla igång",
 ];
 
-export interface Profile {
+export interface Profile extends Synced {
   id: "profile";
   name?: string;
   age?: number;

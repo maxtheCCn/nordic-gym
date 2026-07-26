@@ -26,7 +26,7 @@ const PERIOD_LABELS: Record<number, string> = {
 };
 
 export default function ReportPage() {
-  const { data, loading, reload } = useData();
+  const { data, loading, error, reload } = useData();
   const [days, setDays] = useState<number>(30);
   const [includeSessions, setIncludeSessions] = useState(true);
   const [notes, setNotes] = useState("");
@@ -83,7 +83,7 @@ export default function ReportPage() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
 
   return (
     <div className="pb-6">

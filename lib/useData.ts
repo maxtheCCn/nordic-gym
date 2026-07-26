@@ -25,7 +25,7 @@ const EMPTY: AppData = {
   machines: [],
   sessions: [],
   sets: [],
-  profile: { id: "profile" },
+  profile: { id: "profile", updatedAt: 0 },
   activeSession: undefined,
 };
 

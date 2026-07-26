@@ -24,7 +24,7 @@ const PERIOD_LABELS: Record<number, string> = {
 };
 
 export default function StatsPage() {
-  const { data, loading } = useData();
+  const { data, loading, error } = useData();
   const [days, setDays] = useState<number>(30);
 
   const stats = useMemo(
@@ -32,7 +32,7 @@ export default function StatsPage() {
     [data, days],
   );
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
 
   if (data.sessions.length === 0) {
     return (

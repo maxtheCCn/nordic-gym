@@ -46,7 +46,7 @@ function EditMachineForm() {
   const router = useRouter();
   const params = useSearchParams();
   const id = params.get("id") ?? "";
-  const { data, loading } = useData();
+  const { data, loading, error } = useData();
   const machine = data.machines.find((m) => m.id === id);
 
   const [gymName, setGymName] = useState("");
@@ -73,7 +73,7 @@ function EditMachineForm() {
     setReady(true);
   }, [machine, data.gyms, ready]);
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
   if (!machine) {
     return (
       <div>

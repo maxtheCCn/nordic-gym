@@ -302,7 +302,34 @@ export function Stat({
   );
 }
 
-export function Spinner({ label = "Laddar…" }: { label?: string }) {
+/**
+ * Laddningsindikator som också kan visa varför laddningen misslyckades.
+ *
+ * Utan felläget skulle ett databasfel se ut som en sida som laddar för alltid,
+ * och det finns inget att göra åt något man inte vet har gått sönder.
+ */
+export function Spinner({
+  label = "Laddar…",
+  error,
+}: {
+  label?: string;
+  error?: string | null;
+}) {
+  if (error) {
+    return (
+      <div className="card mt-4 px-4 py-5 text-center" role="alert">
+        <p className="font-semibold text-warn">Kunde inte läsa din data</p>
+        <p className="mt-1.5 text-sm text-muted">{error}</p>
+        <Button
+          variant="secondary"
+          className="mt-4"
+          onClick={() => window.location.reload()}
+        >
+          Ladda om
+        </Button>
+      </div>
+    );
+  }
   return (
     <p className="py-10 text-center text-sm text-muted" role="status">
       {label}

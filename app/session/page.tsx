@@ -35,7 +35,7 @@ function SessionDetail() {
   const router = useRouter();
   const params = useSearchParams();
   const id = params.get("id") ?? "";
-  const { data, loading, reload } = useData();
+  const { data, loading, error, reload } = useData();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const session = data.sessions.find((s) => s.id === id);
@@ -67,7 +67,7 @@ function SessionDetail() {
     }));
   }, [session, data.sets, machineById]);
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
   if (!session) {
     return (
       <div>

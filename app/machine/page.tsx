@@ -32,7 +32,7 @@ export default function MachinePage() {
 function MachineLogger() {
   const params = useSearchParams();
   const machineId = params.get("id") ?? "";
-  const { data, loading, reload } = useData();
+  const { data, loading, error, reload } = useData();
 
   const machine = data.machines.find((m) => m.id === machineId);
   const gym = data.gyms.find((g) => g.id === machine?.gymId);
@@ -65,7 +65,7 @@ function MachineLogger() {
       .sort((a, b) => a.timestamp - b.timestamp);
   }, [data.sets, data.activeSession, machine]);
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
 
   if (!machine) {
     return (

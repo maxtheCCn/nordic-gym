@@ -12,12 +12,13 @@ import {
   Spinner,
   TextInput,
 } from "@/components/ui";
+import { SyncPanel } from "@/components/SyncPanel";
 import { clearAll, exportBackup, importBackup, saveProfile } from "@/lib/db";
 import { useData } from "@/lib/useData";
 import { GOALS, type Goal } from "@/lib/types";
 
 export default function SettingsPage() {
-  const { data, loading, reload } = useData();
+  const { data, loading, error, reload } = useData();
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
@@ -64,7 +65,7 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
 
   return (
     <div className="pb-6">
@@ -178,6 +179,8 @@ export default function SettingsPage() {
           Lägg till manuellt
         </LinkButton>
       </div>
+
+      <SyncPanel onSynced={reload} />
 
       {/* ---------------------------------------------------------- rapport */}
       <SectionTitle>AI-analys</SectionTitle>

@@ -47,7 +47,7 @@ function NewMachineForm() {
   const router = useRouter();
   const params = useSearchParams();
   const qrRaw = params.get("qr") ?? "";
-  const { data, loading } = useData();
+  const { data, loading, error: dataError } = useData();
 
   const [gymName, setGymName] = useState("");
   const [name, setName] = useState("");
@@ -115,7 +115,7 @@ function NewMachineForm() {
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading || dataError) return <Spinner error={dataError} />;
 
   return (
     <form onSubmit={handleSave} className="pb-6">

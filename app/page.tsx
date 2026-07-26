@@ -12,7 +12,7 @@ import type { Machine, SetEntry } from "@/lib/types";
 
 export default function HomePage() {
   const router = useRouter();
-  const { data, loading, reload } = useData();
+  const { data, loading, error, reload } = useData();
   const { activeSession, machines, sets, sessions, gyms } = data;
 
   // Passtimern ska räkna upp i realtid medan man tränar.
@@ -53,7 +53,7 @@ export default function HomePage() {
   const activeGym = gyms.find((g) => g.id === activeSession?.gymId);
   const lastSession = sessions.find((s) => s.endedAt !== null);
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
 
   return (
     <div className="pb-4">

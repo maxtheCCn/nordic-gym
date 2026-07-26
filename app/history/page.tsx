@@ -8,7 +8,7 @@ import { sessionMinutes } from "@/lib/stats";
 import { useData } from "@/lib/useData";
 
 export default function HistoryPage() {
-  const { data, loading } = useData();
+  const { data, loading, error } = useData();
   const { sessions, sets, machines, gyms } = data;
 
   const machineById = useMemo(
@@ -28,7 +28,7 @@ export default function HistoryPage() {
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [sessions]);
 
-  if (loading) return <Spinner />;
+  if (loading || error) return <Spinner error={error} />;
 
   return (
     <div className="pb-4">

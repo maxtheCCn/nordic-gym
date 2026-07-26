@@ -24,6 +24,8 @@ interface NordicDB extends DBSchema {
     indexes: { bySession: string; byMachine: string; byTime: number };
   };
   profile: { key: string; value: Profile };
+  /** Småsaker som inte hör hemma i loggen, t.ex. tidpunkt för senaste synk. */
+  meta: { key: string; value: { key: string; value: unknown } };
 }
 
 let dbPromise: Promise<IDBPDatabase<NordicDB>> | null = null;
@@ -33,27 +35,114 @@ function getDb() {
     throw new Error("Databasen finns bara i webbläsaren");
   }
   if (!dbPromise) {
-    dbPromise = openDB<NordicDB>("nordic-gym", 1, {
-      upgrade(db) {
-        db.createObjectStore("gyms", { keyPath: "id" });
+    dbPromise = openDB<NordicDB>("nordic-gym", 2, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          db.createObjectStore("gyms", { keyPath: "id" });
 
-        const machines = db.createObjectStore("machines", { keyPath: "id" });
-        machines.createIndex("byQrKey", "qrKey", { unique: true });
-        machines.createIndex("byGym", "gymId");
+          const machines = db.createObjectStore("machines", { keyPath: "id" });
+          machines.createIndex("byQrKey", "qrKey", { unique: true });
+          machines.createIndex("byGym", "gymId");
 
-        const sessions = db.createObjectStore("sessions", { keyPath: "id" });
-        sessions.createIndex("byStart", "startedAt");
+          const sessions = db.createObjectStore("sessions", { keyPath: "id" });
+          sessions.createIndex("byStart", "startedAt");
 
-        const sets = db.createObjectStore("sets", { keyPath: "id" });
-        sets.createIndex("bySession", "sessionId");
-        sets.createIndex("byMachine", "machineId");
-        sets.createIndex("byTime", "timestamp");
+          const sets = db.createObjectStore("sets", { keyPath: "id" });
+          sets.createIndex("bySession", "sessionId");
+          sets.createIndex("byMachine", "machineId");
+          sets.createIndex("byTime", "timestamp");
 
-        db.createObjectStore("profile", { keyPath: "id" });
+          db.createObjectStore("profile", { keyPath: "id" });
+        }
+
+        if (oldVersion < 2) {
+          db.createObjectStore("meta", { keyPath: "key" });
+        }
       },
+      /*
+       * Den här fliken håller en äldre version öppen medan en annan flik vill
+       * uppgradera. Stänger vi inte får ingen av dem fortsätta: den andra
+       * fliken blockeras för alltid och användaren ser bara "Laddar…".
+       */
+      blocking() {
+        void dbPromise?.then((db) => db.close());
+        dbPromise = null;
+      },
+      blocked() {
+        throw new Error(
+          "Appen är öppen i en annan flik med en äldre version. Stäng övriga " +
+            "flikar med appen och ladda om.",
+        );
+      },
+      terminated() {
+        // Webbläsaren stängde anslutningen (t.ex. vid minnesbrist).
+        // Nästa anrop öppnar en ny i stället för att använda en död.
+        dbPromise = null;
+      },
+    }).then(async (db) => {
+      await backfillTimestamps(db);
+      return db;
     });
   }
   return dbPromise;
+}
+
+const SYNCABLE = ["gyms", "machines", "sessions", "sets", "profile"] as const;
+
+/**
+ * Ger poster som skapades innan synken fanns en `updatedAt`.
+ *
+ * Utan den skulle de aldrig skickas upp till servern — synken frågar efter
+ * "allt som ändrats sedan sist" och en post utan tidsstämpel svarar aldrig ja.
+ * De dateras efter när de faktiskt uppstod, så att en nyare ändring på en
+ * annan enhet fortfarande vinner över dem.
+ *
+ * Körs efter att databasen öppnats i stället för inuti uppgraderingen: en
+ * uppgraderingstransaktion stängs så fort den slutar användas, och att blanda
+ * in egna löften där är ett känt sätt att tappa halva migreringen.
+ */
+async function backfillTimestamps(db: IDBPDatabase<NordicDB>): Promise<void> {
+  const done = await db.get("meta", "backfilledTimestamps");
+  if (done) return;
+
+  for (const name of SYNCABLE) {
+    const rows = (await db.getAll(name)) as unknown as Record<string, unknown>[];
+    const missing = rows.filter((r) => typeof r.updatedAt !== "number");
+    for (const row of missing) {
+      row.updatedAt =
+        (row.createdAt as number) ??
+        (row.timestamp as number) ??
+        (row.startedAt as number) ??
+        Date.now();
+      row.deletedAt = null;
+      await db.put(name, row as never);
+    }
+  }
+
+  await db.put("meta", { key: "backfilledTimestamps", value: true });
+}
+
+/** Stämplar en post som ändrad nu. All skrivning går genom den här. */
+function touch<T extends object>(record: T): T & { updatedAt: number } {
+  return { ...record, updatedAt: Date.now() };
+}
+
+/** Filtrerar bort gravstenar — raderade poster ska inte synas i appen. */
+function alive<T extends { deletedAt?: number | null }>(rows: T[]): T[] {
+  return rows.filter((r) => !r.deletedAt);
+}
+
+/* ------------------------------------------------------------------- meta */
+
+export async function getMeta<T>(key: string): Promise<T | undefined> {
+  const db = await getDb();
+  const row = await db.get("meta", key);
+  return row?.value as T | undefined;
+}
+
+export async function setMeta(key: string, value: unknown): Promise<void> {
+  const db = await getDb();
+  await db.put("meta", { key, value });
 }
 
 export function newId(): string {
@@ -128,13 +217,13 @@ export function normalizeQr(raw: string): string {
 export async function getProfile(): Promise<Profile> {
   const db = await getDb();
   const found = await db.get("profile", "profile");
-  return found ?? { id: "profile" };
+  return found ?? { id: "profile", updatedAt: 0 };
 }
 
 export async function saveProfile(patch: Partial<Profile>): Promise<Profile> {
   const db = await getDb();
   const current = await getProfile();
-  const next: Profile = { ...current, ...patch, id: "profile" };
+  const next = touch({ ...current, ...patch, id: "profile" as const });
   await db.put("profile", next);
   return next;
 }
@@ -143,7 +232,7 @@ export async function saveProfile(patch: Partial<Profile>): Promise<Profile> {
 
 export async function listGyms(): Promise<Gym[]> {
   const db = await getDb();
-  const gyms = await db.getAll("gyms");
+  const gyms = alive(await db.getAll("gyms"));
   return gyms.sort((a, b) => a.name.localeCompare(b.name, "sv"));
 }
 
@@ -156,11 +245,16 @@ export async function getGym(id: string): Promise<Gym | undefined> {
 export async function ensureGym(name: string): Promise<Gym> {
   const db = await getDb();
   const trimmed = name.trim();
-  const existing = (await db.getAll("gyms")).find(
+  const existing = alive(await db.getAll("gyms")).find(
     (g) => g.name.toLowerCase() === trimmed.toLowerCase(),
   );
   if (existing) return existing;
-  const gym: Gym = { id: newId(), name: trimmed, createdAt: Date.now() };
+  const gym = touch({
+    id: newId(),
+    name: trimmed,
+    createdAt: Date.now(),
+    deletedAt: null,
+  });
   await db.put("gyms", gym);
   return gym;
 }
@@ -169,49 +263,63 @@ export async function renameGym(id: string, name: string): Promise<void> {
   const db = await getDb();
   const gym = await db.get("gyms", id);
   if (!gym) return;
-  await db.put("gyms", { ...gym, name: name.trim() });
+  await db.put("gyms", touch({ ...gym, name: name.trim() }));
 }
 
 /* -------------------------------------------------------------- maskiner */
 
 export async function listMachines(): Promise<Machine[]> {
   const db = await getDb();
-  const machines = await db.getAll("machines");
+  const machines = alive(await db.getAll("machines"));
   return machines.sort((a, b) => a.name.localeCompare(b.name, "sv"));
 }
 
 export async function getMachine(id: string): Promise<Machine | undefined> {
   const db = await getDb();
-  return db.get("machines", id);
+  const machine = await db.get("machines", id);
+  return machine?.deletedAt ? undefined : machine;
 }
 
 export async function findMachineByQr(raw: string): Promise<Machine | undefined> {
   const db = await getDb();
   const key = normalizeQr(raw);
   if (!key) return undefined;
-  return db.getFromIndex("machines", "byQrKey", key);
+  const machine = await db.getFromIndex("machines", "byQrKey", key);
+  // En raderad maskin ska inte kännas igen — skanningen ska leda till
+  // registrering på nytt, inte till en gravsten.
+  return machine?.deletedAt ? undefined : machine;
 }
 
 export async function saveMachine(
-  machine: Omit<Machine, "id" | "createdAt"> & { id?: string; createdAt?: number },
+  machine: Omit<Machine, "id" | "createdAt" | "updatedAt"> & {
+    id?: string;
+    createdAt?: number;
+  },
 ): Promise<Machine> {
   const db = await getDb();
-  const full: Machine = {
+  const full = touch({
+    deletedAt: null,
     ...machine,
     id: machine.id ?? newId(),
     createdAt: machine.createdAt ?? Date.now(),
-  };
+  });
   await db.put("machines", full);
   return full;
 }
 
 export async function deleteMachine(id: string): Promise<void> {
   const db = await getDb();
+  const machine = await db.get("machines", id);
   const sets = await db.getAllFromIndex("sets", "byMachine", id);
+  const now = Date.now();
   const tx = db.transaction(["machines", "sets"], "readwrite");
   await Promise.all([
-    tx.objectStore("machines").delete(id),
-    ...sets.map((s) => tx.objectStore("sets").delete(s.id)),
+    machine
+      ? tx.objectStore("machines").put({ ...machine, deletedAt: now, updatedAt: now })
+      : undefined,
+    ...sets.map((s) =>
+      tx.objectStore("sets").put({ ...s, deletedAt: now, updatedAt: now }),
+    ),
     tx.done,
   ]);
 }
@@ -220,19 +328,20 @@ export async function deleteMachine(id: string): Promise<void> {
 
 export async function listSessions(): Promise<Session[]> {
   const db = await getDb();
-  const sessions = await db.getAll("sessions");
+  const sessions = alive(await db.getAll("sessions"));
   return sessions.sort((a, b) => b.startedAt - a.startedAt);
 }
 
 export async function getSession(id: string): Promise<Session | undefined> {
   const db = await getDb();
-  return db.get("sessions", id);
+  const session = await db.get("sessions", id);
+  return session?.deletedAt ? undefined : session;
 }
 
 /** Passet som pågår just nu, om något. */
 export async function getActiveSession(): Promise<Session | undefined> {
   const db = await getDb();
-  const sessions = await db.getAll("sessions");
+  const sessions = alive(await db.getAll("sessions"));
   return sessions
     .filter((s) => s.endedAt === null)
     .sort((a, b) => b.startedAt - a.startedAt)[0];
@@ -242,12 +351,13 @@ export async function startSession(gymId: string): Promise<Session> {
   const db = await getDb();
   const active = await getActiveSession();
   if (active) return active;
-  const session: Session = {
+  const session = touch({
     id: newId(),
     gymId,
     startedAt: Date.now(),
     endedAt: null,
-  };
+    deletedAt: null,
+  });
   await db.put("sessions", session);
   return session;
 }
@@ -256,16 +366,22 @@ export async function endSession(id: string): Promise<void> {
   const db = await getDb();
   const session = await db.get("sessions", id);
   if (!session || session.endedAt !== null) return;
-  await db.put("sessions", { ...session, endedAt: Date.now() });
+  await db.put("sessions", touch({ ...session, endedAt: Date.now() }));
 }
 
 export async function deleteSession(id: string): Promise<void> {
   const db = await getDb();
+  const session = await db.get("sessions", id);
   const sets = await db.getAllFromIndex("sets", "bySession", id);
+  const now = Date.now();
   const tx = db.transaction(["sessions", "sets"], "readwrite");
   await Promise.all([
-    tx.objectStore("sessions").delete(id),
-    ...sets.map((s) => tx.objectStore("sets").delete(s.id)),
+    session
+      ? tx.objectStore("sessions").put({ ...session, deletedAt: now, updatedAt: now })
+      : undefined,
+    ...sets.map((s) =>
+      tx.objectStore("sets").put({ ...s, deletedAt: now, updatedAt: now }),
+    ),
     tx.done,
   ]);
 }
@@ -291,19 +407,19 @@ export async function ensureActiveSession(gymId: string): Promise<Session> {
 
 export async function listSets(): Promise<SetEntry[]> {
   const db = await getDb();
-  const sets = await db.getAll("sets");
+  const sets = alive(await db.getAll("sets"));
   return sets.sort((a, b) => a.timestamp - b.timestamp);
 }
 
 export async function setsForSession(sessionId: string): Promise<SetEntry[]> {
   const db = await getDb();
-  const sets = await db.getAllFromIndex("sets", "bySession", sessionId);
+  const sets = alive(await db.getAllFromIndex("sets", "bySession", sessionId));
   return sets.sort((a, b) => a.timestamp - b.timestamp);
 }
 
 export async function setsForMachine(machineId: string): Promise<SetEntry[]> {
   const db = await getDb();
-  const sets = await db.getAllFromIndex("sets", "byMachine", machineId);
+  const sets = alive(await db.getAllFromIndex("sets", "byMachine", machineId));
   return sets.sort((a, b) => a.timestamp - b.timestamp);
 }
 
@@ -315,16 +431,17 @@ export async function setsForMachine(machineId: string): Promise<SetEntry[]> {
  * pausen användaren tog.
  */
 export async function addSet(
-  input: Omit<SetEntry, "id" | "setNumber" | "timestamp" | "restSec"> & {
+  input: Omit<
+    SetEntry,
+    "id" | "setNumber" | "timestamp" | "restSec" | "updatedAt"
+  > & {
     timestamp?: number;
   },
 ): Promise<SetEntry> {
   const db = await getDb();
   const timestamp = input.timestamp ?? Date.now();
-  const sessionSets = await db.getAllFromIndex(
-    "sets",
-    "bySession",
-    input.sessionId,
+  const sessionSets = alive(
+    await db.getAllFromIndex("sets", "bySession", input.sessionId),
   );
 
   const setNumber =
@@ -337,14 +454,25 @@ export async function addSet(
     ? Math.round((timestamp - previous.timestamp) / 1000)
     : undefined;
 
-  const entry: SetEntry = { ...input, id: newId(), setNumber, timestamp, restSec };
+  const entry = touch({
+    deletedAt: null,
+    ...input,
+    id: newId(),
+    setNumber,
+    timestamp,
+    restSec,
+  });
   await db.put("sets", entry);
   return entry;
 }
 
 export async function deleteSet(id: string): Promise<void> {
   const db = await getDb();
-  await db.delete("sets", id);
+  const set = await db.get("sets", id);
+  if (!set) return;
+  // Gravsten i stället för borttagning, annars kommer setet tillbaka vid
+  // nästa synk från en enhet som inte känner till raderingen.
+  await db.put("sets", touch({ ...set, deletedAt: Date.now() }));
 }
 
 /* --------------------------------------------------------- export/import */
@@ -371,40 +499,52 @@ export async function exportBackup(): Promise<Backup> {
 }
 
 /**
- * Läser in en säkerhetskopia. Poster med id som redan finns skrivs över,
- * övriga läggs till — så det går att slå ihop data från två telefoner.
+ * Läser in en säkerhetskopia och slår ihop den med det som redan finns.
+ *
+ * Vid krock vinner den nyaste versionen av posten, precis som vid synk. Det
+ * gör att en gammal exportfil inte kan skriva över nyare träningar.
  */
 export async function importBackup(backup: Backup): Promise<void> {
   if (backup?.format !== "nordic-gym") {
     throw new Error("Filen är inte en giltig säkerhetskopia från appen.");
   }
   const db = await getDb();
-  const tx = db.transaction(
-    ["gyms", "machines", "sessions", "sets", "profile"],
-    "readwrite",
-  );
-  await Promise.all([
-    ...backup.gyms.map((g) => tx.objectStore("gyms").put(g)),
-    ...backup.machines.map((m) => tx.objectStore("machines").put(m)),
-    ...backup.sessions.map((s) => tx.objectStore("sessions").put(s)),
-    ...backup.sets.map((s) => tx.objectStore("sets").put(s)),
-    backup.profile ? tx.objectStore("profile").put(backup.profile) : undefined,
-    tx.done,
-  ]);
+
+  const merge = async (
+    name: "gyms" | "machines" | "sessions" | "sets" | "profile",
+    rows: { id: string; updatedAt?: number }[],
+  ) => {
+    for (const row of rows) {
+      const existing = (await db.get(name, row.id)) as
+        | { updatedAt?: number }
+        | undefined;
+      const incoming = row.updatedAt ?? 0;
+      if (existing && (existing.updatedAt ?? 0) > incoming) continue;
+      await db.put(name, { updatedAt: incoming, ...row } as never);
+    }
+  };
+
+  await merge("gyms", backup.gyms);
+  await merge("machines", backup.machines);
+  await merge("sessions", backup.sessions);
+  await merge("sets", backup.sets);
+  if (backup.profile) await merge("profile", [backup.profile]);
 }
 
+/**
+ * Raderar allt.
+ *
+ * Poster märks som borttagna i stället för att försvinna, så att raderingen
+ * når andra enheter vid nästa synk. Försvann de spårlöst skulle nästa synk
+ * bara ladda ner allt igen.
+ */
 export async function clearAll(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(
-    ["gyms", "machines", "sessions", "sets", "profile"],
-    "readwrite",
-  );
-  await Promise.all([
-    tx.objectStore("gyms").clear(),
-    tx.objectStore("machines").clear(),
-    tx.objectStore("sessions").clear(),
-    tx.objectStore("sets").clear(),
-    tx.objectStore("profile").clear(),
-    tx.done,
-  ]);
+  const now = Date.now();
+  for (const name of SYNCABLE) {
+    const rows = (await db.getAll(name)) as { id: string }[];
+    for (const row of rows) {
+      await db.put(name, { ...row, deletedAt: now, updatedAt: now } as never);
+    }
+  }
 }
