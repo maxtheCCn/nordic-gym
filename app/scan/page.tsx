@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { Scanner } from "@/components/Scanner";
-import { PageHeader, Spinner } from "@/components/ui";
+import { LinkButton, PageHeader, Spinner } from "@/components/ui";
 import { findMachineByQr } from "@/lib/db";
 
 export default function ScanPage() {
@@ -34,7 +34,18 @@ export default function ScanPage() {
       {busy ? (
         <Spinner label="Öppnar maskinen…" />
       ) : (
-        <Scanner onResult={handleResult} />
+        <>
+          <Scanner onResult={handleResult} />
+          {/* Står man framför ett löpband finns ingen kod att skanna. */}
+          <div className="mt-4 flex gap-2">
+            <LinkButton href="/machines" className="flex-1">
+              Välj i listan
+            </LinkButton>
+            <LinkButton href="/machine/new" className="flex-1">
+              Ny utan QR-kod
+            </LinkButton>
+          </div>
+        </>
       )}
     </div>
   );

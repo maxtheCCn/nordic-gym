@@ -12,7 +12,7 @@ import {
   Stepper,
   TextInput,
 } from "@/components/ui";
-import { ensureGym, normalizeQr, saveMachine, saveProfile } from "@/lib/db";
+import { ensureGym, newId, normalizeQr, saveMachine, saveProfile } from "@/lib/db";
 import { useData } from "@/lib/useData";
 import {
   DEFAULT_METRICS,
@@ -91,7 +91,13 @@ function NewMachineForm() {
     try {
       const gym = await ensureGym(gymName);
       const machine = await saveMachine({
-        qrKey: normalizeQr(qrRaw) || normalizeQr(`manuell:${name}-${Date.now()}`),
+        /*
+         * Maskiner utan QR-kod får en egen nyckel. Den måste vara unik
+         * eftersom qrKey har ett unikt index, och den får aldrig krocka med en
+         * riktig kod — därav prefixet. Tidigare kördes strängen genom
+         * URL-tolkning, vilket fungerade av en slump snarare än av avsikt.
+         */
+        qrKey: normalizeQr(qrRaw) || `manuell:${newId()}`,
         qrRaw,
         gymId: gym.id,
         name: name.trim(),
@@ -124,7 +130,7 @@ function NewMachineForm() {
         subtitle={
           qrRaw
             ? "Koden är okänd — fyll i maskinen en gång så känns den igen sedan"
-            : "Lägg till en maskin utan QR-kod"
+            : "För löpband, bänkar och annat utan QR-kod. Du hittar den sedan under Välj maskin."
         }
       />
 

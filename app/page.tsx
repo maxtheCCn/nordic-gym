@@ -98,6 +98,18 @@ export default function HomePage() {
         </span>
       </Link>
 
+      {/* Alla maskiner har inte QR-kod — löpband, bänkar och fria vikter
+          måste gå att nå utan att skanna. */}
+      <Link
+        href="/machines"
+        className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-5 py-3.5 font-semibold active:bg-surface-2"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+        </svg>
+        Välj maskin i listan
+      </Link>
+
       {/* ------------------------------------------------------ aktivt pass */}
       {activeSession ? (
         <section className="card mt-4 p-4">
