@@ -32,14 +32,30 @@ export default function ReportPage() {
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const report = useMemo(() => {
-    if (loading) return "";
-    return buildReport(
-      { machines: data.machines, sessions: data.sessions, sets: data.sets },
-      data.profile,
-      data.gyms,
-      { days, includeSessions, extraNotes: notes },
-    );
+  /*
+   * Rapporten byggs av all data på en gång. Går något fel i en enda rad ska
+   * det inte ta ner hela sidan och lämna användaren med "Application error" —
+   * felet visas i stället, och resten av appen fungerar vidare.
+   */
+  const { report, buildError } = useMemo(() => {
+    if (loading) return { report: "", buildError: null as string | null };
+    try {
+      return {
+        report: buildReport(
+          { machines: data.machines, sessions: data.sessions, sets: data.sets },
+          data.profile,
+          data.gyms,
+          { days, includeSessions, extraNotes: notes },
+        ),
+        buildError: null as string | null,
+      };
+    } catch (e) {
+      return {
+        report: "",
+        buildError:
+          e instanceof Error ? `${e.message}\n\n${e.stack ?? ""}` : String(e),
+      };
+    }
   }, [loading, data, days, includeSessions, notes]);
 
   async function copy() {
@@ -173,12 +189,28 @@ export default function ReportPage() {
       </div>
 
       <SectionTitle>Förhandsvisning</SectionTitle>
-      <pre className="card max-h-96 overflow-auto whitespace-pre-wrap break-words px-4 py-3 text-xs leading-relaxed text-muted">
-        {report}
-      </pre>
-      <p className="mt-2 text-center text-xs text-muted">
-        {report.length.toLocaleString("sv-SE")} tecken
-      </p>
+      {buildError ? (
+        <div className="card px-4 py-3">
+          <p className="text-sm font-semibold text-warn">
+            Rapporten kunde inte byggas
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Din träningsdata är oskadd. Skicka texten nedan så kan felet rättas.
+          </p>
+          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted">
+            {buildError}
+          </pre>
+        </div>
+      ) : (
+        <>
+          <pre className="card max-h-96 overflow-auto whitespace-pre-wrap break-words px-4 py-3 text-xs leading-relaxed text-muted">
+            {report}
+          </pre>
+          <p className="mt-2 text-center text-xs text-muted">
+            {report.length.toLocaleString("sv-SE")} tecken
+          </p>
+        </>
+      )}
     </div>
   );
 }
