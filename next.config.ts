@@ -1,4 +1,17 @@
+import { readFileSync } from "node:fs";
 import type { NextConfig } from "next";
+
+/**
+ * Versionen som `scripts/stamp-version.mjs` skrev. Bakas in i koden så att
+ * appen kan jämföra sig själv mot den version som ligger på servern.
+ */
+function buildTime(): string {
+  try {
+    return JSON.parse(readFileSync("./public/version.json", "utf8")).buildTime;
+  } catch {
+    return "";
+  }
+}
 
 /**
  * På GitHub Pages ligger sidan under /<repo>, inte på roten. Då måste alla
@@ -16,6 +29,7 @@ const nextConfig: NextConfig = {
   basePath: basePath || undefined,
   // Pages serverar /nordic-gym/scan/ som mapp — utan detta blir det 404.
   trailingSlash: true,
+  env: { NEXT_PUBLIC_BUILD_TIME: buildTime() },
 };
 
 export default nextConfig;

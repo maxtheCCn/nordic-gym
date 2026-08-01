@@ -9,6 +9,9 @@
  */
 import { execSync } from "node:child_process";
 
+// Måste ske före bygget: next.config.ts läser filen för att baka in versionen.
+execSync("node scripts/stamp-version.mjs", { stdio: "inherit" });
+
 const repo = process.env.PAGES_REPO ?? "nordic-gym";
 
 execSync("next build", {

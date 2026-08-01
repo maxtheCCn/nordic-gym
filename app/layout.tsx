@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { DemoBanner } from "@/components/DemoBanner";
 import { SplashIntro } from "@/components/SplashIntro";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { TabBar } from "@/components/TabBar";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
         {/* I layouten, så introt spelar vid appstart men inte vid flikbyte. */}
         <SplashIntro />
         <DemoBanner />
+        <UpdateBanner />
         <main className="mx-auto min-h-screen w-full max-w-md px-4 pt-5">
           {children}
         </main>

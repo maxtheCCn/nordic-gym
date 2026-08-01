@@ -14,6 +14,7 @@ import {
   TextInput,
 } from "@/components/ui";
 import { SyncPanel } from "@/components/SyncPanel";
+import { buildLabel, reloadFresh } from "@/components/UpdateBanner";
 import { enterDemo, exitDemo, isDemo, resetDemoData } from "@/lib/demo";
 import { clearAll, exportBackup, importBackup, saveProfile } from "@/lib/db";
 import { useData } from "@/lib/useData";
@@ -144,6 +145,20 @@ export default function SettingsPage() {
             </Select>
           </Field>
         )}
+      </div>
+
+      <SectionTitle>Appen</SectionTitle>
+      <div className="card space-y-3 p-4">
+        <p className="text-sm text-muted">
+          Version <span className="font-semibold text-white">{buildLabel()}</span>
+        </p>
+        <p className="text-xs text-muted">
+          På hemskärmen finns ingen uppdateringsknapp. Appen säger till när en
+          ny version finns, men du kan hämta den härifrån när du vill.
+        </p>
+        <Button variant="secondary" className="w-full" onClick={reloadFresh}>
+          Hämta senaste versionen
+        </Button>
       </div>
 
       <SectionTitle>Demoläge</SectionTitle>
