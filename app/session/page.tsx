@@ -45,6 +45,30 @@ function SessionDetail() {
     [data.machines],
   );
 
+  /**
+   * Muskelbalans för just det här passet.
+   *
+   * Samma vy som på statistiksidan men avgränsad till ett pass — det är där
+   * man ser om dagen blev sned, medan det fortfarande går att göra något åt
+   * det nästa gång.
+   */
+  const balance = useMemo(() => {
+    if (!session) return [];
+    const own = data.sets.filter((s) => s.sessionId === session.id);
+    const totals = new Map<string, { sets: number; volume: number }>();
+    for (const s of own) {
+      const group = machineById.get(s.machineId)?.muscleGroup;
+      if (!group) continue;
+      const entry = totals.get(group) ?? { sets: 0, volume: 0 };
+      entry.sets += 1;
+      entry.volume += setVolume(s);
+      totals.set(group, entry);
+    }
+    return [...totals.entries()]
+      .map(([group, v]) => ({ group, ...v }))
+      .sort((a, b) => b.sets - a.sets);
+  }, [session, data.sets, machineById]);
+
   /** Set grupperade per maskin, i den ordning maskinerna användes. */
   const exercises = useMemo(() => {
     if (!session) return [];
@@ -79,6 +103,16 @@ function SessionDetail() {
 
   const allSets = exercises.flatMap((e) => e.sets);
   const volume = allSets.reduce((sum, s) => sum + setVolume(s), 0);
+  const reps = allSets.reduce((sum, s) => sum + (s.reps ?? 0), 0);
+  const cardioSec = allSets.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
+
+  /** Vila mellan set inom passet, för att se om tempot var jämnt. */
+  const rests = allSets
+    .map((s) => s.restSec)
+    .filter((r): r is number => typeof r === "number" && r > 0 && r < 900);
+  const avgRest = rests.length
+    ? rests.reduce((a, b) => a + b, 0) / rests.length
+    : 0;
 
   return (
     <div className="pb-6">
@@ -102,6 +136,48 @@ function SessionDetail() {
           sub="kg totalt"
         />
       </div>
+
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <Stat label="Reps" value={String(reps)} sub="totalt" />
+        <Stat
+          label="Snittvila"
+          value={avgRest ? formatDuration(avgRest) : "—"}
+          sub="mellan set"
+        />
+        <Stat
+          label="Kondition"
+          value={cardioSec ? formatDuration(cardioSec) : "—"}
+          sub={cardioSec ? "totalt" : "inget loggat"}
+        />
+      </div>
+
+      {balance.length > 0 && (
+        <>
+          <SectionTitle>Muskelbalans i passet</SectionTitle>
+          <div className="card space-y-2.5 px-4 py-4">
+            {balance.map((m) => (
+              <div key={m.group}>
+                <div className="mb-1 flex items-baseline justify-between text-sm">
+                  <span className="font-medium">{m.group}</span>
+                  <span className="tabular-nums text-muted">
+                    {m.sets} set
+                    {m.volume > 0 &&
+                      ` · ${Math.round(m.volume).toLocaleString("sv-SE")} kg`}
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-brand"
+                    style={{
+                      width: `${(m.sets / Math.max(...balance.map((b) => b.sets))) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {session.endedAt === null && (
         <Button

@@ -13,7 +13,7 @@ import {
   setWeight,
   type Dataset,
 } from "./stats";
-import type { Gym, Profile, SetEntry } from "./types";
+import type { Gym, Profile, SetEntry, SupplementEntry } from "./types";
 
 export interface ReportOptions {
   /** Antal dagar bakåt. 0 = hela historiken. */
@@ -35,6 +35,7 @@ export function buildReport(
   profile: Profile,
   gyms: Gym[],
   options: ReportOptions,
+  supplements: SupplementEntry[] = [],
 ): string {
   const { days, includeSessions, extraNotes } = options;
   const scoped = filterByDays(data, days);
@@ -175,6 +176,51 @@ export function buildReport(
         for (const s of own) {
           out.push(`  ${describeSet(s)}`);
         }
+      }
+      out.push("");
+    }
+  }
+
+  /* -------------------------------------------------------- tillskott */
+  if (supplements.length) {
+    const cutoff = days ? Date.now() - days * 86_400_000 : 0;
+    const recent = supplements.filter((s) => s.timestamp >= cutoff);
+
+    if (recent.length) {
+      out.push("TILLSKOTT");
+      out.push("");
+
+      // Sammanställt per preparat: hur ofta och hur mycket. En lista över
+      // varje enskilt intag hade varit oläsbar och sagt mindre.
+      const byName = new Map<
+        string,
+        { days: Set<string>; total: number; unit?: string; count: number }
+      >();
+      for (const s of recent) {
+        const entry = byName.get(s.name) ?? {
+          days: new Set<string>(),
+          total: 0,
+          unit: s.unit,
+          count: 0,
+        };
+        entry.days.add(new Date(s.timestamp).toDateString());
+        entry.total += s.amount ?? 0;
+        entry.count += 1;
+        byName.set(s.name, entry);
+      }
+
+      const spanDays = days || 30;
+      for (const [name, v] of [...byName.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0], "sv"),
+      )) {
+        const perDay = v.total / v.days.size;
+        const dose =
+          v.total > 0
+            ? ` — ${formatNumber(perDay)} ${v.unit ?? ""} per dag de dagar det togs`
+            : "";
+        out.push(
+          `${name}: ${v.days.size} av ${spanDays} dagar${dose}`,
+        );
       }
       out.push("");
     }

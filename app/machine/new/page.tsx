@@ -10,6 +10,7 @@ import {
   Select,
   Spinner,
   Stepper,
+  TextArea,
   TextInput,
 } from "@/components/ui";
 import { ensureGym, newId, normalizeQr, saveMachine, saveProfile } from "@/lib/db";
@@ -63,6 +64,7 @@ function NewMachineForm() {
   const [plates, setPlates] = useState<number[]>([2.5, 3.75, 5]);
   const [weightStep, setWeightStep] = useState(2.5);
   const [targetSets, setTargetSets] = useState(3);
+  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +115,7 @@ function NewMachineForm() {
         plateOptions: [...plates].sort((a, b) => a - b),
         weightStep,
         targetSets,
+        note: note.trim() || undefined,
       });
       // Första gymmet blir automatiskt hemmagym.
       if (!data.profile.homeGymId) await saveProfile({ homeGymId: gym.id });
@@ -273,6 +276,19 @@ function NewMachineForm() {
           hint="Visas som “Set 2 av 3” när du loggar. Går att ändra när som helst."
         >
           <Stepper value={targetSets} onChange={setTargetSets} min={1} max={20} />
+        </Field>
+      </div>
+
+      <div className="mt-5">
+        <Field
+          label="Anteckning"
+          hint="Inställningar du behöver komma ihåg — sitthöjd, hålläge, greppbredd. Visas när du loggar."
+        >
+          <TextArea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="T.ex. sits 4, ryggstöd 2, greppet inåt"
+          />
         </Field>
       </div>
 

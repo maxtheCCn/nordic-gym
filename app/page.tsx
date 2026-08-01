@@ -64,15 +64,27 @@ export default function HomePage() {
           </p>
           <h1 className="text-2xl font-bold tracking-tight">Träningslogg</h1>
         </div>
-        <Link
-          href="/stats"
-          aria-label="Statistik"
-          className="tap flex w-11 items-center justify-center rounded-xl border border-line bg-surface text-muted active:bg-surface-2"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-          </svg>
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/supplements"
+            aria-label="Tillskott"
+            className="tap flex w-11 items-center justify-center rounded-xl border border-line bg-surface text-muted active:bg-surface-2"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7z" />
+              <path d="M8.5 8.5l7 7" />
+            </svg>
+          </Link>
+          <Link
+            href="/stats"
+            aria-label="Statistik"
+            className="tap flex w-11 items-center justify-center rounded-xl border border-line bg-surface text-muted active:bg-surface-2"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+            </svg>
+          </Link>
+        </div>
       </header>
 
       {/* Skanna-knappen är sidans tyngdpunkt — den är det man kommer hit för. */}

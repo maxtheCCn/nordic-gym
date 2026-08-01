@@ -161,6 +161,35 @@ export interface Profile extends Synced {
 }
 
 /**
+ * Ett intag av ett tillskott.
+ *
+ * En rad per intag i stället för en summa per dag: tar man protein tre gånger
+ * om dagen är det tre rader. Summeringen görs när den visas, och då går det
+ * också att se när på dagen något togs.
+ */
+export interface SupplementEntry extends Synced {
+  id: string;
+  /** Fritext — "Kreatin", "Protein", "Omega-3". */
+  name: string;
+  amount?: number;
+  /** "g", "mg", "ml", "st" … */
+  unit?: string;
+  timestamp: number;
+  note?: string;
+}
+
+export const SUPPLEMENT_UNITS = ["g", "mg", "µg", "ml", "st"];
+
+/** Förslag första gången, innan det finns egen historik att utgå från. */
+export const COMMON_SUPPLEMENTS: { name: string; amount: number; unit: string }[] = [
+  { name: "Kreatin", amount: 5, unit: "g" },
+  { name: "Protein", amount: 30, unit: "g" },
+  { name: "Vitamin D", amount: 20, unit: "µg" },
+  { name: "Omega-3", amount: 1000, unit: "mg" },
+  { name: "Magnesium", amount: 200, unit: "mg" },
+];
+
+/**
  * En övning i ett rekommenderat pass.
  *
  * Maskinen pekas ut med namn, inte id: planen skrivs utifrån en

@@ -106,6 +106,13 @@ function MachineLogger() {
         }
       />
 
+      {/* Inställningarna behövs innan man sätter sig, inte efteråt. */}
+      {machine.note && (
+        <p className="mb-3 rounded-xl border border-brand/30 bg-brand/10 px-4 py-3 text-sm text-white">
+          {machine.note}
+        </p>
+      )}
+
       <PreviousCard previous={previous} setCount={previousSetCount} />
       {data.profile.restTimer !== false && (
         <RestTimer

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   ChipGroup,
@@ -12,10 +12,10 @@ import {
   TextArea,
   TextInput,
 } from "@/components/ui";
-import { saveProfile } from "@/lib/db";
+import { listSupplements, saveProfile } from "@/lib/db";
 import { buildReport } from "@/lib/report";
 import { useData } from "@/lib/useData";
-import { GOALS, type Goal } from "@/lib/types";
+import { GOALS, type Goal, type SupplementEntry } from "@/lib/types";
 
 const PERIODS = [30, 90, 365, 0] as const;
 const PERIOD_LABELS: Record<number, string> = {
@@ -31,6 +31,11 @@ export default function ReportPage() {
   const [includeSessions, setIncludeSessions] = useState(true);
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
+  // Tillskotten ligger i ett eget lager och följer inte med useData.
+  const [supplements, setSupplements] = useState<SupplementEntry[]>([]);
+  useEffect(() => {
+    void listSupplements().then(setSupplements);
+  }, []);
 
   /*
    * Rapporten byggs av all data på en gång. Går något fel i en enda rad ska
@@ -46,6 +51,7 @@ export default function ReportPage() {
           data.profile,
           data.gyms,
           { days, includeSessions, extraNotes: notes },
+          supplements,
         ),
         buildError: null as string | null,
       };
@@ -56,7 +62,7 @@ export default function ReportPage() {
           e instanceof Error ? `${e.message}\n\n${e.stack ?? ""}` : String(e),
       };
     }
-  }, [loading, data, days, includeSessions, notes]);
+  }, [loading, data, days, includeSessions, notes, supplements]);
 
   async function copy() {
     try {

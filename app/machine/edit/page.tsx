@@ -10,6 +10,7 @@ import {
   Select,
   Spinner,
   Stepper,
+  TextArea,
   TextInput,
 } from "@/components/ui";
 import { deleteMachine, ensureGym, saveMachine } from "@/lib/db";
@@ -57,6 +58,7 @@ function EditMachineForm() {
   const [plates, setPlates] = useState<number[]>([]);
   const [weightStep, setWeightStep] = useState(2.5);
   const [targetSets, setTargetSets] = useState(3);
+  const [note, setNote] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -70,6 +72,7 @@ function EditMachineForm() {
     setPlates(machine.plateOptions);
     setWeightStep(machine.weightStep);
     setTargetSets(machine.targetSets ?? 3);
+    setNote(machine.note ?? "");
     setReady(true);
   }, [machine, data.gyms, ready]);
 
@@ -98,6 +101,7 @@ function EditMachineForm() {
       plateOptions: [...plates].sort((a, b) => a - b),
       weightStep,
       targetSets,
+      note: note.trim() || undefined,
     });
     router.replace(`/machine?id=${machine.id}`);
   }
@@ -229,6 +233,19 @@ function EditMachineForm() {
           hint="Visas som “Set 2 av 3” när du loggar."
         >
           <Stepper value={targetSets} onChange={setTargetSets} min={1} max={20} />
+        </Field>
+      </div>
+
+      <div className="mt-5">
+        <Field
+          label="Anteckning"
+          hint="Inställningar du behöver komma ihåg. Visas när du loggar."
+        >
+          <TextArea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="T.ex. sits 4, ryggstöd 2, greppet inåt"
+          />
         </Field>
       </div>
 

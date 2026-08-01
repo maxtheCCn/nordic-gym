@@ -13,6 +13,7 @@ const KINDS = {
   sets: "set",
   profile: "profile",
   plans: "plan",
+  supplements: "supplement",
 } as const;
 
 type StoreName = keyof typeof KINDS;

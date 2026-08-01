@@ -16,6 +16,7 @@ import type {
   Profile,
   Session,
   SetEntry,
+  SupplementEntry,
 } from "./types";
 
 interface NordicDB extends DBSchema {
@@ -34,6 +35,11 @@ interface NordicDB extends DBSchema {
   profile: { key: string; value: Profile };
   /** Rekommenderade pass — skrivna utanför appen, lagrade här. */
   plans: { key: string; value: Plan };
+  supplements: {
+    key: string;
+    value: SupplementEntry;
+    indexes: { byTime: number };
+  };
   /** Småsaker som inte hör hemma i loggen, t.ex. tidpunkt för senaste synk. */
   meta: { key: string; value: { key: string; value: unknown } };
 }
@@ -44,7 +50,7 @@ interface NordicDB extends DBSchema {
  * Exporteras så att sync.ts öppnar samma version — öppnar två delar av appen
  * databasen med olika versionsnummer blockerar de varandra.
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase<NordicDB>> | null = null;
 
@@ -92,6 +98,13 @@ function getDb() {
         if (need("profile")) db.createObjectStore("profile", { keyPath: "id" });
         if (need("meta")) db.createObjectStore("meta", { keyPath: "key" });
         if (need("plans")) db.createObjectStore("plans", { keyPath: "id" });
+
+        if (need("supplements")) {
+          const supplements = db.createObjectStore("supplements", {
+            keyPath: "id",
+          });
+          supplements.createIndex("byTime", "timestamp");
+        }
       },
       /*
        * Den här fliken håller en äldre version öppen medan en annan flik vill
@@ -589,6 +602,38 @@ async function renumberSets(
     if (siblings[i].setNumber === i + 1) continue;
     await db.put("sets", { ...siblings[i], setNumber: i + 1, updatedAt: now });
   }
+}
+
+/* ------------------------------------------------------------ tillskott */
+
+export async function listSupplements(): Promise<SupplementEntry[]> {
+  const db = await getDb();
+  return alive(await db.getAll("supplements")).sort(
+    (a, b) => b.timestamp - a.timestamp,
+  );
+}
+
+export async function addSupplement(
+  input: Omit<SupplementEntry, "id" | "updatedAt" | "timestamp"> & {
+    timestamp?: number;
+  },
+): Promise<SupplementEntry> {
+  const db = await getDb();
+  const entry = touch({
+    deletedAt: null,
+    ...input,
+    id: newId(),
+    timestamp: input.timestamp ?? Date.now(),
+  });
+  await db.put("supplements", entry);
+  return entry;
+}
+
+export async function deleteSupplement(id: string): Promise<void> {
+  const db = await getDb();
+  const entry = await db.get("supplements", id);
+  if (!entry) return;
+  await db.put("supplements", touch({ ...entry, deletedAt: Date.now() }));
 }
 
 /* ------------------------------------------------ rekommenderade pass */
