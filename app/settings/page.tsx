@@ -11,6 +11,7 @@ import {
   SectionTitle,
   Select,
   Spinner,
+  TextArea,
   TextInput,
 } from "@/components/ui";
 import { SyncPanel } from "@/components/SyncPanel";
@@ -28,6 +29,8 @@ export default function SettingsPage() {
   const [bodyWeight, setBodyWeight] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   // Läses efter montering — localStorage finns inte när sidan byggs statiskt.
   const [demoOn, setDemoOn] = useState(false);
@@ -58,6 +61,55 @@ export default function SettingsPage() {
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Säkerhetskopian är sparad.");
+  }
+
+  /**
+   * Kopierar hela loggen som text.
+   *
+   * Filhantering på iPhone är en omväg: nedladdningen hamnar någonstans i
+   * Filer och ska sedan hittas igen, ofta ett år senare och under stress. Som
+   * text kan den klistras in i Anteckningar, ett mejl till sig själv eller vad
+   * som helst som användaren faktiskt hittar tillbaka till.
+   */
+  async function copyAsText() {
+    const backup = await exportBackup();
+    const text = JSON.stringify(backup);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      el.remove();
+    }
+    setStatus(
+      `Hela loggen är kopierad (${Math.round(text.length / 1024)} kB). ` +
+        "Klistra in den i Anteckningar så har du den kvar även om appen nollställs.",
+    );
+  }
+
+  /** Återställer från inklistrad text i stället för en fil. */
+  async function restoreFromText() {
+    setStatus(null);
+    try {
+      await importBackup(JSON.parse(paste));
+      await reload();
+      setPaste("");
+      setShowPaste(false);
+      setStatus("Data återställd.");
+    } catch (e) {
+      setStatus(
+        e instanceof SyntaxError
+          ? "Texten kunde inte läsas. Kontrollera att du fick med allt, från { till }."
+          : e instanceof Error
+            ? e.message
+            : "Kunde inte läsa texten.",
+      );
+    }
   }
 
   async function handleImport(file: File) {
@@ -271,20 +323,70 @@ export default function SettingsPage() {
 
       {/* ------------------------------------------------------------- data */}
       <SectionTitle>Din data</SectionTitle>
-      <p className="mb-2 text-xs text-muted">
-        Allt sparas bara i den här webbläsaren — inget konto, ingen server.
-        Exportera regelbundet om du byter telefon eller rensar webbläsardata.
+      <p className="mb-3 text-xs text-muted">
+        Allt sparas bara i den här webbläsaren — inget konto, ingen server. Tar
+        du bort appen från hemskärmen försvinner loggen med den, så ta en kopia
+        då och då.
       </p>
+
+      {/*
+        Textvägen ligger först: den fungerar när filvägen inte gör det. På
+        iPhone hamnar en nedladdning någonstans i Filer och ska sedan hittas
+        igen — som text kan den klistras in i Anteckningar, där den är lätt att
+        återfinna.
+      */}
+      <Button variant="primary" className="w-full" onClick={copyAsText}>
+        Kopiera hela loggen som text
+      </Button>
+      <p className="mt-2 text-xs text-muted">
+        Klistra in den i Anteckningar. Behöver du den tillbaka kopierar du
+        texten därifrån och klistrar in den nedan.
+      </p>
+
+      <div className="mt-3">
+        {showPaste ? (
+          <div className="space-y-2">
+            <TextArea
+              value={paste}
+              onChange={(e) => setPaste(e.target.value)}
+              placeholder="Klistra in din sparade text här"
+              className="min-h-32 font-mono text-xs"
+            />
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={restoreFromText}
+                disabled={!paste.trim()}
+              >
+                Återställ
+              </Button>
+              <Button variant="secondary" onClick={() => setShowPaste(false)}>
+                Avbryt
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => setShowPaste(true)}
+          >
+            Återställ från text
+          </Button>
+        )}
+      </div>
+
+      <p className="mb-2 mt-5 text-xs text-muted">Eller via fil:</p>
       <div className="flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={handleExport}>
-          Exportera
+          Exportera fil
         </Button>
         <Button
           variant="secondary"
           className="flex-1"
           onClick={() => fileRef.current?.click()}
         >
-          Importera
+          Importera fil
         </Button>
       </div>
       <input

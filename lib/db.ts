@@ -725,15 +725,33 @@ export async function importBackup(backup: Backup): Promise<void> {
 
   const merge = async (
     name: "gyms" | "machines" | "sessions" | "sets" | "profile",
-    rows: { id: string; updatedAt?: number }[],
+    rows: { id: string; updatedAt?: number; deletedAt?: number | null }[],
   ) => {
     for (const row of rows) {
       const existing = (await db.get(name, row.id)) as
-        | { updatedAt?: number }
+        | { updatedAt?: number; deletedAt?: number | null }
         | undefined;
       const incoming = row.updatedAt ?? 0;
-      if (existing && (existing.updatedAt ?? 0) > incoming) continue;
-      await db.put(name, { updatedAt: incoming, ...row } as never);
+
+      /*
+       * En post som finns i kopian men är raderad lokalt ska tillbaka.
+       *
+       * "Radera all data" märker varje post som borttagen med dagens
+       * tidsstämpel. Med enbart nyast-vinner slog de raderingarna ut hela
+       * säkerhetskopian, och återställningen sa "klart" utan att något kom
+       * tillbaka — värsta tänkbara utfall för den som just tömt appen av
+       * misstag. Att importera en kopia är ett uttryckligt "lägg tillbaka
+       * det här", och väger tyngre än en tidigare radering.
+       */
+      const revives = Boolean(existing?.deletedAt) && !row.deletedAt;
+
+      if (existing && !revives && (existing.updatedAt ?? 0) > incoming) continue;
+      await db.put(name, {
+        updatedAt: incoming,
+        ...row,
+        // Utan detta behåller posten sin gravsten och förblir osynlig.
+        ...(revives ? { deletedAt: null, updatedAt: Date.now() } : {}),
+      } as never);
     }
   };
 
