@@ -6,6 +6,7 @@ import {
   type IDBPDatabase,
   type StoreNames,
 } from "idb";
+import { BASELINE, baselineKey, baselineMetrics } from "./baseline";
 import { databaseName, demoSeed, isDemo } from "./demo";
 import type {
   Backup,
@@ -130,6 +131,7 @@ function getDb() {
       await backfillTimestamps(db);
       await repairSetNumbers(db);
       await seedDemoIfEmpty(db);
+      await seedBaselineOnce(db);
       return db;
     });
   }
@@ -199,6 +201,88 @@ async function repairSetNumbers(db: IDBPDatabase<NordicDB>): Promise<void> {
   }
 
   await db.put("meta", { key: "repairedSetNumbers", value: true });
+}
+
+/**
+ * Lägger in baslistans maskiner.
+ *
+ * Körs en gång, och hoppar över allt som redan finns — matchat både på
+ * QR-nyckel och på namn. En användare som redan skannat sina maskiner ska få
+ * de som saknas, inte dubbletter av dem hen har.
+ *
+ * Baslistans maskiner har inga loggade set och märks därför "Inte använd" i
+ * maskinlistan tills man kör dem första gången.
+ */
+async function seedBaseline(db: IDBPDatabase<NordicDB>): Promise<number> {
+  /*
+   * Alla maskiner räknas här, även raderade.
+   *
+   * En gravsten behåller sin QR-nyckel i det unika indexet — den är borta ur
+   * appen men inte ur databasen. Filtrerade vi bort dem skulle baslistan
+   * försöka lägga in en nyckel som redan finns, och hela databasen vägra
+   * öppna. Att en raderad maskin inte kommer tillbaka är dessutom rätt: den
+   * togs bort med avsikt.
+   */
+  const existing = await db.getAll("machines");
+  const keys = new Set(existing.map((m) => m.qrKey));
+  const names = new Set(existing.map((m) => m.name.trim().toLowerCase()));
+
+  // Baslistan behöver ett gym att höra till. Finns inget skapas ett, som går
+  // att döpa om till rätt klubb.
+  let gym = alive(await db.getAll("gyms"))[0];
+  if (!gym) {
+    gym = touch({
+      id: newId(),
+      name: "Nordic Wellness",
+      createdAt: Date.now(),
+      deletedAt: null,
+    });
+    await db.put("gyms", gym);
+  }
+
+  let added = 0;
+  for (const item of BASELINE) {
+    const qrKey = baselineKey(item);
+    if (keys.has(qrKey) || names.has(item.name.trim().toLowerCase())) continue;
+
+    await db.put(
+      "machines",
+      touch({
+        id: newId(),
+        qrKey,
+        qrRaw: "",
+        gymId: gym.id,
+        name: item.name,
+        muscleGroup: item.muscleGroup,
+        type: item.type,
+        metrics: baselineMetrics(item),
+        plateOptions: item.type === "strength" ? [2.5, 3.75, 5] : [],
+        weightStep: 2.5,
+        targetSets: item.type === "cardio" ? 1 : 3,
+        note: item.note,
+        createdAt: Date.now(),
+        deletedAt: null,
+      }),
+    );
+    keys.add(qrKey);
+    names.add(item.name.trim().toLowerCase());
+    added++;
+  }
+  return added;
+}
+
+async function seedBaselineOnce(db: IDBPDatabase<NordicDB>): Promise<void> {
+  // Demot har sin egen uppsättning och ska inte blandas ihop med baslistan.
+  if (isDemo()) return;
+  if (await db.get("meta", "seededBaseline")) return;
+  await seedBaseline(db);
+  await db.put("meta", { key: "seededBaseline", value: true });
+}
+
+/** Kör baslistan igen på begäran, t.ex. efter att man rensat bland maskinerna. */
+export async function addMissingBaseline(): Promise<number> {
+  const db = await getDb();
+  return seedBaseline(db);
 }
 
 /**
@@ -282,15 +366,35 @@ export function newId(): string {
  * inte är en LFconnect-kod, så att den generella normaliseringen tar vid.
  */
 function lifeFitnessKey(url: URL): string | null {
+  /*
+   * Samma maskin dyker upp i tre skepnader beroende på hur gammalt
+   * klistermärket är:
+   *
+   *   trainer.lifefitness.com/qrredirect?referer-link=<base64 av nedanstående>
+   *   halo.fitness/q?t=s&m=sste
+   *   lfconnect.com/q?t=s&m=sste
+   *
+   * Alla tre pekar på modell `sste`. Utan den här hopslagningen fick de olika
+   * nycklar och samma maskin registrerades flera gånger — det hände på riktigt
+   * med tricepsmaskinen.
+   */
+  const direct = (u: URL): string | null => {
+    if (!/(^|\.)(halo\.fitness|lfconnect\.com)$/i.test(u.hostname)) return null;
+    const model = u.searchParams.get("m");
+    if (!model) return null;
+    const type = u.searchParams.get("t");
+    return `lifefitness:${type ?? "?"}:${model}`.toLowerCase();
+  };
+
+  const own = direct(url);
+  if (own) return own;
+
+  // Den inslagna varianten: den riktiga länken ligger base64-kodad inuti.
   if (!/(^|\.)lifefitness\.com$/i.test(url.hostname)) return null;
   const encoded = url.searchParams.get("referer-link");
   if (!encoded) return null;
   try {
-    const inner = new URL(atob(encoded));
-    const type = inner.searchParams.get("t");
-    const model = inner.searchParams.get("m");
-    if (!model) return null;
-    return `lifefitness:${type ?? "?"}:${model}`.toLowerCase();
+    return direct(new URL(atob(encoded)));
   } catch {
     return null;
   }
@@ -722,6 +826,7 @@ export async function importBackup(backup: Backup): Promise<void> {
     throw new Error("Filen är inte en giltig säkerhetskopia från appen.");
   }
   const db = await getDb();
+  let failed = 0;
 
   const merge = async (
     name: "gyms" | "machines" | "sessions" | "sets" | "profile",
@@ -746,12 +851,24 @@ export async function importBackup(backup: Backup): Promise<void> {
       const revives = Boolean(existing?.deletedAt) && !row.deletedAt;
 
       if (existing && !revives && (existing.updatedAt ?? 0) > incoming) continue;
-      await db.put(name, {
-        updatedAt: incoming,
-        ...row,
-        // Utan detta behåller posten sin gravsten och förblir osynlig.
-        ...(revives ? { deletedAt: null, updatedAt: Date.now() } : {}),
-      } as never);
+
+      if (name === "machines") await freeQrKey(db, row as unknown as Machine);
+
+      try {
+        await db.put(name, {
+          updatedAt: incoming,
+          ...row,
+          // Utan detta behåller posten sin gravsten och förblir osynlig.
+          ...(revives ? { deletedAt: null, updatedAt: Date.now() } : {}),
+        } as never);
+      } catch {
+        /*
+         * En enda post som vägrar sparas får inte ta med sig resten.
+         * Tidigare avbröts hela återställningen på första krocken, och
+         * användaren fick tillbaka en del av sin logg utan att få veta det.
+         */
+        failed++;
+      }
     }
   };
 
@@ -760,6 +877,62 @@ export async function importBackup(backup: Backup): Promise<void> {
   await merge("sessions", backup.sessions);
   await merge("sets", backup.sets);
   if (backup.profile) await merge("profile", [backup.profile]);
+
+  if (failed > 0) {
+    throw new Error(
+      `${failed} poster kunde inte läsas in. Resten är återställd.`,
+    );
+  }
+}
+
+/**
+ * Gör plats för en maskin vars QR-nyckel redan är upptagen av en annan.
+ *
+ * Baslistan lägger beslag på nycklarna till de vanliga Life Fitness-maskinerna.
+ * Återställer man sedan en säkerhetskopia där samma maskin har ett annat id
+ * krockar de i det unika indexet, och importen misslyckas.
+ *
+ * Den inkommande vinner: den har träningshistorik bakom sig, medan baslistans
+ * post bara är en platshållare. Platshållaren får en avställd nyckel och märks
+ * borttagen, så att inget försvinner utan att den slutar vara i vägen.
+ */
+async function freeQrKey(
+  db: IDBPDatabase<NordicDB>,
+  incoming: Machine,
+): Promise<void> {
+  if (!incoming?.id) return;
+  const now = Date.now();
+
+  const retire = async (holder: Machine) => {
+    await db.put("machines", {
+      ...holder,
+      qrKey: `${holder.qrKey}#ersatt-${holder.id}`,
+      deletedAt: now,
+      updatedAt: now,
+    });
+  };
+
+  if (incoming.qrKey) {
+    const byKey = await db.getFromIndex("machines", "byQrKey", incoming.qrKey);
+    if (byKey && byKey.id !== incoming.id) await retire(byKey);
+  }
+
+  /*
+   * Samma sak för namnkrockar, men bara mot tomma platshållare.
+   *
+   * Återställer man en kopia på en app som redan fyllts med baslistan skulle
+   * man annars få två "Chest Press" — en oanvänd och en med all sin historik.
+   * En maskin som faktiskt har loggade set rörs aldrig.
+   */
+  const sameName = alive(await db.getAll("machines")).filter(
+    (m) =>
+      m.id !== incoming.id &&
+      m.name.trim().toLowerCase() === incoming.name?.trim().toLowerCase(),
+  );
+  for (const other of sameName) {
+    const sets = alive(await db.getAllFromIndex("sets", "byMachine", other.id));
+    if (sets.length === 0) await retire(other);
+  }
 }
 
 /**

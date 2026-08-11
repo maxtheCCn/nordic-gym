@@ -124,7 +124,7 @@ export default function MachinesPage() {
                             {machine.name}
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-muted">
-                            {used ? relativeDay(used) : "Aldrig loggad"}
+                            {used ? relativeDay(used) : "Inte använd"}
                           </span>
                         </span>
                         {last && setWeight(last) > 0 && (
