@@ -106,6 +106,46 @@ export async function publishMachines(machines: Machine[]): Promise<number> {
   return rows.length;
 }
 
+/**
+ * Letar upp en enskild maskin i den gemensamma parken och lägger den i den
+ * egna loggen.
+ *
+ * Används när en skanning inte hittar maskinen lokalt. Utan det här hamnar
+ * den som skannar en maskin som lagts till i katalogen efter hens senaste
+ * synk i registreringsformuläret — trots att allt redan är ifyllt på servern.
+ */
+export async function adoptFromCatalog(
+  qrKey: string,
+): Promise<Machine | null> {
+  const client = supabase();
+  if (!client || !qrKey) return null;
+
+  const { data, error } = await client
+    .from("shared_machines")
+    .select("*")
+    .eq("qr_key", qrKey)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const s = data as SharedMachine;
+  const gym = await currentGym();
+  return saveMachine({
+    qrKey: s.qr_key,
+    qrRaw: s.qr_raw ?? "",
+    gymId: gym.id,
+    name: s.name,
+    muscleGroup: s.muscle_group as MuscleGroup,
+    type: s.type as MachineType,
+    metrics: s.metrics,
+    plateOptions: s.plate_options,
+    weightStep: s.weight_step,
+    targetSets: s.target_sets ?? 3,
+    note: s.note ?? undefined,
+    imagePath: s.image_path ?? undefined,
+    deletedAt: null,
+  });
+}
+
 export async function removeFromCatalog(qrKey: string): Promise<void> {
   const client = supabase();
   if (!client) return;

@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
 import { Scanner } from "@/components/Scanner";
 import { Button, LinkButton, PageHeader, Spinner } from "@/components/ui";
-import { findMachineByQr, listMachines } from "@/lib/db";
+import { adoptFromCatalog } from "@/lib/catalog";
+import { findMachineByQr, listMachines, normalizeQr } from "@/lib/db";
 import type { Machine } from "@/lib/types";
 
 export default function ScanPage() {
@@ -32,7 +33,21 @@ function ScanFlow() {
   const handleResult = useCallback(
     async (raw: string) => {
       setBusy(true);
-      const machine = await findMachineByQr(raw);
+      let machine = await findMachineByQr(raw);
+
+      /*
+       * Finns maskinen inte lokalt kan den ändå ligga i den gemensamma parken
+       * — den kan ha lagts till efter användarens senaste synk. Att hämta hem
+       * den här gör att man slipper fylla i ett formulär för något som redan
+       * är ifyllt på servern.
+       */
+      if (!machine) {
+        try {
+          machine = (await adoptFromCatalog(normalizeQr(raw))) ?? undefined;
+        } catch {
+          // Ingen uppkoppling. Registreringen nedan fungerar ändå.
+        }
+      }
 
       if (!machine) {
         // Okänd kod. Väntar passet på en viss maskin följer namnet med, så

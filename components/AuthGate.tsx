@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { isDemo } from "@/lib/demo";
 import { supabase, syncConfigured } from "@/lib/supabase";
+import { syncNow } from "@/lib/sync";
 import { AuthScreen } from "./AuthScreen";
 
 const SKIP_KEY = "nw-skip-auth";
@@ -46,6 +47,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setState(data.session ? "inne" : "ute");
   }, [bypassed]);
 
+  /*
+   * Synkar så fort någon är inloggad, oavsett vilken sida hen landar på.
+   *
+   * Tidigare kördes synken bara när inställningssidan visades. En ny användare
+   * som loggade in och gick direkt till skannern hade varken sin egen logg
+   * eller den gemensamma maskinparken, och möttes av ett tomt formulär för en
+   * maskin som redan fanns färdig på servern.
+   */
+  const syncQuietly = useCallback(async () => {
+    try {
+      await syncNow();
+    } catch {
+      // Offline eller server nere. Appen fungerar lokalt ändå, och
+      // inställningssidan visar felet för den som söker det.
+    }
+  }, []);
+
   useEffect(() => {
     void check();
 
@@ -58,11 +76,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (!client) return;
     // Loggar man ut i inställningarna ska man hamna på inloggningen direkt.
     const { data: sub } = client.auth.onAuthStateChange((_event, session) => {
-      if (session || bypassed()) setState("inne");
-      else setState("ute");
+      if (session || bypassed()) {
+        setState("inne");
+        if (session) void syncQuietly();
+      } else {
+        setState("ute");
+      }
     });
     return () => sub.subscription.unsubscribe();
-  }, [check, bypassed]);
+  }, [check, bypassed, syncQuietly]);
 
   // Ingen skärm alls medan sessionen läses — annars blinkar inloggningen
   // förbi varje gång appen öppnas.
