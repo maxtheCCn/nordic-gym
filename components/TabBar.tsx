@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/**
+ * Fyra flikar. Inställningar ligger inte här längre utan nås från startsidan —
+ * platsen är i stället reserverad för topplistan.
+ */
 const TABS = [
   { href: "/", label: "Start", icon: "M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
   { href: "/history", label: "Historik", icon: "M12 8v5l3 2M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" },
   { href: "/stats", label: "Statistik", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
-  { href: "/settings", label: "Mer", icon: "M4 6h16M4 12h16M4 18h16" },
+  {
+    href: "/leaderboard",
+    label: "Topplista",
+    icon: "M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3",
+  },
 ];
 
 export function TabBar() {
