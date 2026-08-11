@@ -8,6 +8,7 @@ import {
   syncConfigured,
   usernameToEmail,
 } from "@/lib/supabase";
+import { clearAuthSkip } from "./AuthGate";
 import { lastSyncAt, resetSyncState, syncNow } from "@/lib/sync";
 import { formatClock, relativeDay } from "@/lib/format";
 import { Button, Field, SectionTitle, TextInput } from "./ui";
@@ -125,6 +126,8 @@ export function SyncPanel({ onSynced }: { onSynced: () => Promise<void> }) {
     // Träningsdatan ligger kvar lokalt — bara synkens minne nollställs, så att
     // nästa konto inte råkar skicka upp den här användarens poster.
     await resetSyncState();
+    // Utan detta hamnar man i appen utan konto i stället för på inloggningen.
+    clearAuthSkip();
     setEmail(null);
     setStatus(null);
     setBusy(false);

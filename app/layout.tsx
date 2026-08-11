@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { AuthGate } from "@/components/AuthGate";
 import { DemoBanner } from "@/components/DemoBanner";
 import { SplashIntro } from "@/components/SplashIntro";
 import { UpdateBanner } from "@/components/UpdateBanner";
@@ -38,10 +39,14 @@ export default function RootLayout({
         <SplashIntro />
         <DemoBanner />
         <UpdateBanner />
-        <main className="mx-auto min-h-screen w-full max-w-md px-4 pt-5">
-          {children}
-        </main>
-        <TabBar />
+        {/* Fliklisten ligger innanför grinden — den som inte är inloggad ska
+            inte se flikar som ändå inte går att använda. */}
+        <AuthGate>
+          <main className="mx-auto min-h-screen w-full max-w-md px-4 pt-5">
+            {children}
+          </main>
+          <TabBar />
+        </AuthGate>
       </body>
     </html>
   );
