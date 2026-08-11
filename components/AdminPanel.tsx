@@ -10,6 +10,7 @@ import {
 } from "@/lib/leaderboard";
 import { syncConfigured } from "@/lib/supabase";
 import { formatNumber } from "@/lib/format";
+import { MachineCatalog } from "./MachineCatalog";
 import { Button, SectionTitle, TextInput } from "./ui";
 
 const PASSWORD = "hmse";
@@ -89,6 +90,8 @@ export function AdminPanel() {
   return (
     <>
       <SectionTitle>Admin</SectionTitle>
+
+      <MachineCatalog admin={admin} />
 
       {admin === false && (
         <p className="card mb-3 px-4 py-3 text-sm text-warn">

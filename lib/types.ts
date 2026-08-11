@@ -99,6 +99,12 @@ export interface Machine extends Synced {
    */
   targetSets?: number;
   note?: string;
+  /**
+   * Sökväg till maskinbilden i den gemensamma hinken. Bilden delas av alla —
+   * det är samma maskin på gymmet — så den lagras en gång oavsett hur många
+   * som tränar där.
+   */
+  imagePath?: string;
   createdAt: number;
 }
 

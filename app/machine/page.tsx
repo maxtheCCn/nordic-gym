@@ -15,6 +15,7 @@ import {
   Stepper,
   TextInput,
 } from "@/components/ui";
+import { machineImageUrl } from "@/lib/catalog";
 import { addSet, deleteSet, ensureActiveSession } from "@/lib/db";
 import { formatClock, formatDuration, formatNumber } from "@/lib/format";
 import { lastSetFor, setWeight } from "@/lib/stats";
@@ -105,6 +106,16 @@ function MachineLogger() {
           </Link>
         }
       />
+
+      {/* Bilden gör det snabbt att se att man står vid rätt maskin. */}
+      {machineImageUrl(machine.imagePath) && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={machineImageUrl(machine.imagePath)!}
+          alt=""
+          className="mb-3 h-40 w-full rounded-2xl border border-line object-cover"
+        />
+      )}
 
       {/* Inställningarna behövs innan man sätter sig, inte efteråt. */}
       {machine.note && (

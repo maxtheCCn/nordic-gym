@@ -2,6 +2,7 @@
 
 import { DB_VERSION, getMeta, setMeta } from "./db";
 import { openDB, type IDBPDatabase } from "idb";
+import { pullCatalog } from "./catalog";
 import { databaseName } from "./demo";
 import { supabase } from "./supabase";
 
@@ -58,6 +59,20 @@ export async function syncNow(): Promise<SyncResult> {
   const db = await raw();
   const pushed = await pushChanges(db, userId);
   const pulled = await pullChanges(db);
+
+  /*
+   * Den gemensamma maskinparken hämtas efter den egna datan.
+   *
+   * Ordningen spelar roll: den egna loggen ska vara på plats först, så att en
+   * maskin man redan har känns igen och inte får en dubblett från katalogen.
+   */
+  try {
+    await pullCatalog();
+  } catch {
+    // Katalogen är en bekvämlighet. Går den inte att hämta ska inte hela
+    // synken av den egna träningen misslyckas.
+  }
+
   const at = Date.now();
   await setMeta("lastSyncAt", at);
   return { pushed, pulled, at };

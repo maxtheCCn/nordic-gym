@@ -89,6 +89,74 @@ create policy "skriv egna lyft" on public.leaderboard_lifts
   with check (auth.uid() = user_id);
 
 -- =============================================================================
+--  Gemensam maskinpark
+--
+--  Maskinerna på gymmet är desamma för alla som tränar där. Att var och en ska
+--  skanna in hela parken själv är dubbelarbete — en administratör publicerar
+--  den en gång, och alla nya konton får den.
+--
+--  Nyckeln är QR-koden. Skannar någon en maskin som redan finns i katalogen
+--  hittas den i stället för att en dubblett skapas.
+-- =============================================================================
+create table if not exists public.shared_machines (
+  id            text   primary key,
+  qr_key        text   not null unique,
+  qr_raw        text,
+  name          text   not null,
+  muscle_group  text   not null,
+  type          text   not null,
+  metrics       jsonb  not null default '[]'::jsonb,
+  plate_options jsonb  not null default '[]'::jsonb,
+  weight_step   numeric not null default 2.5,
+  target_sets   int,
+  note          text,
+  -- Sökväg i machine-images-hinken.
+  image_path    text,
+  updated_at    bigint not null
+);
+
+alter table public.shared_machines enable row level security;
+
+drop policy if exists "alla inloggade läser maskiner" on public.shared_machines;
+create policy "alla inloggade läser maskiner" on public.shared_machines
+  for select to authenticated using (true);
+
+-- Bara administratörer får ändra i den gemensamma parken. Annars kunde vem
+-- som helst döpa om eller radera maskiner för alla andra.
+drop policy if exists "admin ändrar maskiner" on public.shared_machines;
+create policy "admin ändrar maskiner" on public.shared_machines
+  for all
+  to authenticated
+  using (exists (select 1 from public.admins a where a.user_id = auth.uid()))
+  with check (exists (select 1 from public.admins a where a.user_id = auth.uid()));
+
+-- Bilder på maskinerna. Delas av alla, så en bild lagras en gång oavsett hur
+-- många som tränar på gymmet.
+insert into storage.buckets (id, name, public)
+values ('machine-images', 'machine-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "maskinbilder är publika" on storage.objects;
+create policy "maskinbilder är publika" on storage.objects
+  for select using (bucket_id = 'machine-images');
+
+drop policy if exists "admin laddar upp maskinbild" on storage.objects;
+create policy "admin laddar upp maskinbild" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'machine-images'
+    and exists (select 1 from public.admins a where a.user_id = auth.uid())
+  );
+
+drop policy if exists "admin byter maskinbild" on storage.objects;
+create policy "admin byter maskinbild" on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'machine-images'
+    and exists (select 1 from public.admins a where a.user_id = auth.uid())
+  );
+
+-- =============================================================================
 --  Administratörer
 --
 --  Lösenordet i appen låser bara upp knapparna. Vem som helst som läser appens
