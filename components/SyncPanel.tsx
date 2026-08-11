@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { isValidUsername, supabase, syncConfigured, usernameToEmail } from "@/lib/supabase";
+import {
+  checkInviteCode,
+  isValidUsername,
+  supabase,
+  syncConfigured,
+  usernameToEmail,
+} from "@/lib/supabase";
 import { lastSyncAt, resetSyncState, syncNow } from "@/lib/sync";
 import { formatClock, relativeDay } from "@/lib/format";
 import { Button, Field, SectionTitle, TextInput } from "./ui";
@@ -20,6 +26,7 @@ export function SyncPanel({ onSynced }: { onSynced: () => Promise<void> }) {
   const [mode, setMode] = useState<Mode>("signup");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -83,6 +90,16 @@ export function SyncPanel({ onSynced }: { onSynced: () => Promise<void> }) {
     setBusy(true);
     setError(null);
     try {
+      if (mode === "signup") {
+        // Kontrolleras före registreringen — annars skapas kontot och
+        // koden blir en meningslös formalitet efteråt.
+        const ok = await checkInviteCode(invite);
+        if (!ok) {
+          setError("Fel inbjudningskod. Fråga den som satt upp appen.");
+          return;
+        }
+      }
+
       const credentials = { email: usernameToEmail(username), password };
       const { error: authError } =
         mode === "signup"
@@ -184,6 +201,21 @@ export function SyncPanel({ onSynced }: { onSynced: () => Promise<void> }) {
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
           />
         </Field>
+
+        {mode === "signup" && (
+          <Field
+            label="Inbjudningskod"
+            hint="Krävs bara när kontot skapas. Fråga den som satt upp appen."
+          >
+            <TextInput
+              value={invite}
+              onChange={(e) => setInvite(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              placeholder="Koden du fått"
+            />
+          </Field>
+        )}
 
         {error && <p className="text-sm text-warn">{error}</p>}
 

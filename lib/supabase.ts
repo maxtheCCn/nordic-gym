@@ -47,3 +47,27 @@ export function usernameToEmail(username: string): string {
 export function isValidUsername(username: string): boolean {
   return /^[a-zA-Z0-9._-]{3,32}$/.test(username.trim());
 }
+
+/**
+ * Kontrollerar inbjudningskoden mot den i databasen.
+ *
+ * Koden ligger i en tabell och inte i appens kod, så att den går att byta
+ * utan ombyggnad. Kontrollen sker i webbläsaren, vilket räcker för att hålla
+ * borta den som råkar hitta adressen — men inte den som läser appens
+ * JavaScript. För en kompisgrupp är det rimligt; ska det vara vattentätt
+ * krävs en serverfunktion.
+ */
+export async function checkInviteCode(code: string): Promise<boolean> {
+  const client = supabase();
+  if (!client) return false;
+  const { data, error } = await client
+    .from("app_config")
+    .select("value")
+    .eq("key", "invite_code")
+    .maybeSingle();
+
+  if (error) throw new Error("Kunde inte nå servern. Är du uppkopplad?");
+  // Ingen kod satt = ingen spärr.
+  if (!data?.value) return true;
+  return data.value.trim() === code.trim();
+}
