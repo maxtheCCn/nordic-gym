@@ -20,7 +20,7 @@ Skapa ett nytt projekt:
 
 Projektet tar ett par minuter att starta.
 
-## 2. Skapa tabellen
+## 2. Skapa tabellerna
 
 I projektet, gå till **SQL Editor** i vänstermenyn och tryck **New query**.
 
@@ -28,6 +28,25 @@ I projektet, gå till **SQL Editor** i vänstermenyn och tryck **New query**.
 kopiera **hela innehållet**, klistra in och tryck **Run**.
 
 Det ska stå `Success. No rows returned`.
+
+Det skapar allt på en gång: träningsloggen, topplistan, en hink för
+profilbilder och en tabell för inbjudningskoden.
+
+## 2b. Sätt din inbjudningskod
+
+Koden börjar som `BYT-MIG`. Byt den till något eget — kör det här i SQL Editor,
+med din egen kod i stället:
+
+```sql
+update public.app_config set value = 'DIN-EGNA-KOD' where key = 'invite_code';
+```
+
+Den som ska skapa konto behöver koden. Du kan byta den när som helst med samma
+kommando, utan att appen behöver byggas om.
+
+**Vad koden skyddar mot:** den håller borta den som råkar hitta adressen. Den
+som läser appens JavaScript kan gräva fram den. För en kompisgrupp räcker det
+— ska det vara vattentätt krävs en serverfunktion, och det är ett större jobb.
 
 ## 3. Stäng av mejlbekräftelse
 

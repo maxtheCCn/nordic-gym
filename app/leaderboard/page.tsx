@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { Avatar } from "@/components/Avatar";
 import { PageHeader, SectionTitle, Spinner } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
 import { buildStats } from "@/lib/stats";
@@ -49,14 +50,23 @@ export default function LeaderboardPage() {
       <SectionTitle>Så kommer den fungera</SectionTitle>
       <ul className="card divide-y divide-line text-sm">
         <li className="px-4 py-3">
-          Du väljer själv <span className="font-semibold text-white">vilka</span>{" "}
-          rekord som publiceras — resten av loggen förblir privat.
+          Du väljer <span className="font-semibold text-white">en gång</span>{" "}
+          vilka övningar som ska synas. Resten av loggen förblir privat.
+        </li>
+        <li className="px-4 py-3">
+          Vikterna uppdateras{" "}
+          <span className="font-semibold text-white">automatiskt</span> när du
+          förbättrar dig — du behöver inte publicera om.
         </li>
         <li className="px-4 py-3">
           Varje övning får en egen lista, tyngsta lyftet först.
         </li>
-        <li className="px-4 py-3">
-          Du syns med ett visningsnamn du väljer, inte ditt användarnamn.
+        <li className="flex items-center gap-3 px-4 py-3">
+          <Avatar name={data.profile.name || "Du"} size={36} />
+          <span>
+            Du syns med visningsnamn och profilbild — eller bara din initial,
+            som här.
+          </span>
         </li>
       </ul>
 
