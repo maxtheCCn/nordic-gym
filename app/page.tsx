@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { TrainingCalendar } from "@/components/TrainingCalendar";
 import { EmptyState, LinkButton, SectionTitle, Spinner } from "@/components/ui";
 import { endSession } from "@/lib/db";
 import { formatClock, formatDuration, formatNumber, relativeDay } from "@/lib/format";
@@ -73,15 +74,6 @@ export default function HomePage() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7z" />
               <path d="M8.5 8.5l7 7" />
-            </svg>
-          </Link>
-          <Link
-            href="/stats"
-            aria-label="Statistik"
-            className="tap flex w-11 items-center justify-center rounded-xl border border-line bg-surface text-muted active:bg-surface-2"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
             </svg>
           </Link>
         </div>
@@ -164,6 +156,14 @@ export default function HomePage() {
         )
       )}
 
+      {/* ------------------------------------------------------- överblick */}
+      {sessions.length > 0 && (
+        <>
+          <SectionTitle>Överblick</SectionTitle>
+          <TrainingCalendar sessions={sessions} sets={sets} />
+        </>
+      )}
+
       {/* --------------------------------------------------- senaste övningar */}
       {recentMachines.length > 0 && (
         <>
@@ -186,6 +186,13 @@ export default function HomePage() {
             ))}
           </div>
         </>
+      )}
+
+      {/* Statistiken bor på egen sida — knappen här är vägen dit. */}
+      {sessions.length > 0 && (
+        <LinkButton href="/stats" className="mt-3 w-full">
+          Övrig statistik
+        </LinkButton>
       )}
 
       {/* ------------------------------------------------ senaste resultat */}
