@@ -6,7 +6,12 @@ import {
   type IDBPDatabase,
   type StoreNames,
 } from "idb";
-import { BASELINE, baselineKey, baselineMetrics } from "./baseline";
+import {
+  BASELINE,
+  baselineKey,
+  baselineMetrics,
+  RETIRED_BASELINE,
+} from "./baseline";
 import { databaseName, demoSeed, isDemo } from "./demo";
 import type {
   Backup,
@@ -132,6 +137,7 @@ function getDb() {
       await repairSetNumbers(db);
       await seedDemoIfEmpty(db);
       await seedBaselineOnce(db);
+      await pruneRetiredBaseline(db);
       return db;
     });
   }
@@ -271,6 +277,59 @@ async function seedBaseline(db: IDBPDatabase<NordicDB>): Promise<number> {
     added++;
   }
   return added;
+}
+
+/**
+ * Rensar bort maskinerna som låg i baslistan tidigare.
+ *
+ * Baslistan innehöll först hela maskinparken, men eftersom varje maskin har en
+ * QR-kod på gymmet blev de överflödiga — man skannar den och får den på köpet.
+ * Kvar ska bara det som saknar kod finnas: stänger, hantlar, bänkar.
+ *
+ * Bara poster utan loggade set tas bort. Har man tränat på maskinen är den ens
+ * egen, oavsett varifrån den kom, och den rörs inte.
+ */
+async function pruneRetiredBaseline(db: IDBPDatabase<NordicDB>): Promise<void> {
+  if (isDemo()) return;
+  if (await db.get("meta", "prunedBaseline")) return;
+
+  const retired = new Set(RETIRED_BASELINE.map((n) => n.toLowerCase()));
+  const now = Date.now();
+
+  for (const machine of alive(await db.getAll("machines"))) {
+    if (!retired.has(machine.name.trim().toLowerCase())) continue;
+
+    /*
+     * Bara maskiner som faktiskt kom ur baslistan.
+     *
+     * Namnet räcker inte som kännetecken: har man själv skannat Chest Press
+     * på gymmet heter den likadant, och skulle raderas nästa gång appen
+     * öppnades — innan man hunnit logga sitt första set. Det som skiljer är
+     * qrRaw: en skannad maskin bär med sig sin råa QR-länk, en ur baslistan
+     * har ingen.
+     */
+    const fromBaseline =
+      !machine.qrRaw &&
+      (machine.qrKey.startsWith("baslista:") ||
+        machine.qrKey.startsWith("lifefitness:"));
+    if (!fromBaseline) continue;
+
+    const sets = alive(
+      await db.getAllFromIndex("sets", "byMachine", machine.id),
+    );
+    if (sets.length > 0) continue;
+
+    await db.put("machines", {
+      ...machine,
+      // Nyckeln frigörs, annars blockerar gravstenen en framtida skanning av
+      // samma maskin.
+      qrKey: `${machine.qrKey}#rensad-${machine.id}`,
+      deletedAt: now,
+      updatedAt: now,
+    });
+  }
+
+  await db.put("meta", { key: "prunedBaseline", value: true });
 }
 
 async function seedBaselineOnce(db: IDBPDatabase<NordicDB>): Promise<void> {

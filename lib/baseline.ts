@@ -29,103 +29,101 @@ export interface BaselineMachine {
 const M: Metric[] = ["weight", "extraPlate", "reps"];
 const FREE: Metric[] = ["weight", "reps"];
 
+/**
+ * Baslistan innehåller bara fria vikter och redskap — inga maskiner.
+ *
+ * Katalogen var först full av maskiner, men eftersom varje maskin har en
+ * QR-kod på gymmet blev de överflödiga: man skannar den och får den på köpet.
+ * Kvar är det som saknar kod och därför måste finnas i förväg — stänger,
+ * hantlar, bänkar och ställningar.
+ */
 export const BASELINE: BaselineMachine[] = [
-  // ------------------------------------------------------------------ bröst
-  { name: "Chest Press", muscleGroup: "Bröst", type: "strength", code: "sscp" },
-  { name: "Incline Chest Press", muscleGroup: "Bröst", type: "strength", note: "Övre bröst" },
-  { name: "Decline Chest Press", muscleGroup: "Bröst", type: "strength", note: "Nedre bröst" },
-  { name: "Pec Deck / Chest Fly", muscleGroup: "Bröst", type: "strength" },
-  { name: "Cable Chest Fly", muscleGroup: "Bröst", type: "strength" },
-  { name: "Smith Machine Bench Press", muscleGroup: "Bröst", type: "free" },
-  { name: "Plate-loaded Chest Press", muscleGroup: "Bröst", type: "free" },
-  { name: "Bänk", muscleGroup: "Bröst", type: "free", note: "Fria vikter" },
-
-  // ------------------------------------------------------------------- rygg
-  { name: "Lat Pulldown", muscleGroup: "Rygg", type: "strength", code: "sspd" },
-  { name: "Seated Row", muscleGroup: "Rygg", type: "strength", code: "ssrw" },
-  { name: "Chest-supported Row", muscleGroup: "Rygg", type: "strength" },
-  { name: "High Row", muscleGroup: "Rygg", type: "strength" },
-  { name: "Low Row", muscleGroup: "Rygg", type: "strength" },
-  { name: "Pullover Machine", muscleGroup: "Rygg", type: "strength" },
-  { name: "Rear Delt Machine", muscleGroup: "Rygg", type: "strength", note: "Bakre axel" },
-  { name: "Assisted Pull-up", muscleGroup: "Rygg", type: "strength", note: "Vikten är avlastning" },
-  { name: "Cable Row", muscleGroup: "Rygg", type: "strength" },
-  { name: "T-bar Row", muscleGroup: "Rygg", type: "free" },
-  { name: "Deadlift Platform", muscleGroup: "Rygg", type: "free", note: "Marklyft" },
-  { name: "Chinsstång", muscleGroup: "Rygg", type: "bodyweight" },
-
-  // ------------------------------------------------------------------ axlar
-  { name: "Shoulder Press", muscleGroup: "Axlar", type: "strength", code: "sssp" },
-  { name: "Lateral Raise", muscleGroup: "Axlar", type: "strength" },
-  { name: "Rear Delt Fly", muscleGroup: "Axlar", type: "strength" },
-  { name: "Cable Lateral Raise", muscleGroup: "Axlar", type: "strength" },
-  { name: "Smith Shoulder Press", muscleGroup: "Axlar", type: "free" },
-
-  // -------------------------------------------------------- ben, framsida lår
-  { name: "Leg Extension", muscleGroup: "Ben", type: "strength", code: "ssle" },
-  { name: "Leg Press", muscleGroup: "Ben", type: "strength" },
-  { name: "Hack Squat", muscleGroup: "Ben", type: "free" },
-  { name: "Pendulum Squat", muscleGroup: "Ben", type: "free" },
-  { name: "Belt Squat", muscleGroup: "Ben", type: "strength" },
-  { name: "V-Squat", muscleGroup: "Ben", type: "free" },
-  { name: "Squat Rack", muscleGroup: "Ben", type: "free" },
-
-  // ------------------------------------------------- ben, baksida lår och säte
-  { name: "Seated Leg Curl", muscleGroup: "Ben", type: "strength", code: "ssslc" },
-  { name: "Lying Leg Curl", muscleGroup: "Ben", type: "strength" },
-  { name: "Standing Leg Curl", muscleGroup: "Ben", type: "strength" },
-  { name: "Hip Thrust Machine", muscleGroup: "Ben", type: "strength", note: "Säte" },
-  { name: "Glute Kickback", muscleGroup: "Ben", type: "strength", note: "Säte" },
-  { name: "Hip Abduction", muscleGroup: "Ben", type: "strength", note: "Utsida höft" },
-  { name: "Hip Adduction", muscleGroup: "Ben", type: "strength", note: "Insida lår" },
-  { name: "Romanian Deadlift Machine", muscleGroup: "Ben", type: "strength" },
-  { name: "Glute Drive", muscleGroup: "Ben", type: "strength", note: "Säte" },
-
-  // ------------------------------------------------------------------ vader
-  { name: "Seated Calf Raise", muscleGroup: "Vader", type: "strength" },
-  { name: "Standing Calf Raise", muscleGroup: "Vader", type: "strength" },
-  { name: "Calf Press", muscleGroup: "Vader", type: "strength" },
-
-  // ----------------------------------------------------------------- biceps
-  { name: "Biceps Curl Machine", muscleGroup: "Biceps", type: "strength", code: "ssbcd" },
-  { name: "Preacher Curl", muscleGroup: "Biceps", type: "free" },
-  { name: "Cable Curl", muscleGroup: "Biceps", type: "strength" },
-  { name: "Cable Hammer Curl", muscleGroup: "Biceps", type: "strength" },
-  { name: "EZ-stång", muscleGroup: "Biceps", type: "free" },
-
-  // ---------------------------------------------------------------- triceps
-  { name: "Triceps Extension", muscleGroup: "Triceps", type: "strength", code: "sste" },
-  { name: "Triceps Pushdown", muscleGroup: "Triceps", type: "strength" },
-  { name: "Dip Machine", muscleGroup: "Triceps", type: "strength" },
-  { name: "Assisted Dip", muscleGroup: "Triceps", type: "strength", note: "Vikten är avlastning" },
-  { name: "Dipställning", muscleGroup: "Triceps", type: "bodyweight" },
-
-  // ------------------------------------------------------------------- mage
-  { name: "Ab Crunch Machine", muscleGroup: "Mage", type: "strength", code: "ssab" },
-  { name: "Cable Crunch", muscleGroup: "Mage", type: "strength" },
-  { name: "Torso Rotation", muscleGroup: "Mage", type: "strength", code: "sstr" },
-  { name: "Rotary Torso", muscleGroup: "Mage", type: "strength" },
-  { name: "Back Extension", muscleGroup: "Mage", type: "bodyweight", note: "Ländrygg och säte" },
-  { name: "Roman Chair", muscleGroup: "Mage", type: "bodyweight" },
-
-  // -------------------------------------------------------------- helkropp
-  { name: "Cable Crossover", muscleGroup: "Helkropp", type: "strength" },
-  { name: "Functional Trainer", muscleGroup: "Helkropp", type: "strength" },
-  { name: "Smith Machine", muscleGroup: "Helkropp", type: "free" },
-  { name: "Power Rack", muscleGroup: "Helkropp", type: "free" },
-  { name: "Half Rack", muscleGroup: "Helkropp", type: "free" },
-  { name: "Adjustable Cable", muscleGroup: "Helkropp", type: "strength" },
   { name: "Hantlar", muscleGroup: "Helkropp", type: "free" },
   { name: "Skivstång", muscleGroup: "Helkropp", type: "free" },
+  { name: "EZ-stång", muscleGroup: "Biceps", type: "free" },
   { name: "Kettlebell", muscleGroup: "Helkropp", type: "free" },
-
-  // -------------------------------------------------------------- kondition
-  { name: "Löpband", muscleGroup: "Kondition", type: "cardio" },
-  { name: "Crosstrainer", muscleGroup: "Kondition", type: "cardio" },
-  { name: "Motionscykel", muscleGroup: "Kondition", type: "cardio" },
-  { name: "Roddmaskin", muscleGroup: "Kondition", type: "cardio" },
-  { name: "Trappmaskin", muscleGroup: "Kondition", type: "cardio" },
+  { name: "Bänk", muscleGroup: "Bröst", type: "free" },
+  { name: "Squat Rack", muscleGroup: "Ben", type: "free" },
+  { name: "Deadlift Platform", muscleGroup: "Rygg", type: "free", note: "Marklyft" },
+  { name: "Dipställning", muscleGroup: "Triceps", type: "bodyweight" },
+  { name: "Chinsstång", muscleGroup: "Rygg", type: "bodyweight" },
 ];
+
+/**
+ * Maskiner som låg i baslistan tidigare och ska rensas bort.
+ *
+ * Behövs för appar som redan hunnit fylla listan. Bara poster utan loggade set
+ * tas bort — har man tränat på maskinen är den ens egen, oavsett varifrån den
+ * kom från början.
+ */
+export const RETIRED_BASELINE: string[] = [
+  "Chest Press",
+  "Incline Chest Press",
+  "Decline Chest Press",
+  "Pec Deck / Chest Fly",
+  "Cable Chest Fly",
+  "Smith Machine Bench Press",
+  "Plate-loaded Chest Press",
+  "Lat Pulldown",
+  "Seated Row",
+  "Chest-supported Row",
+  "High Row",
+  "Low Row",
+  "Pullover Machine",
+  "Rear Delt Machine",
+  "Assisted Pull-up",
+  "Cable Row",
+  "T-bar Row",
+  "Shoulder Press",
+  "Lateral Raise",
+  "Rear Delt Fly",
+  "Cable Lateral Raise",
+  "Smith Shoulder Press",
+  "Leg Extension",
+  "Leg Press",
+  "Hack Squat",
+  "Pendulum Squat",
+  "Belt Squat",
+  "V-Squat",
+  "Seated Leg Curl",
+  "Lying Leg Curl",
+  "Standing Leg Curl",
+  "Hip Thrust Machine",
+  "Glute Kickback",
+  "Hip Abduction",
+  "Hip Adduction",
+  "Romanian Deadlift Machine",
+  "Glute Drive",
+  "Seated Calf Raise",
+  "Standing Calf Raise",
+  "Calf Press",
+  "Biceps Curl Machine",
+  "Preacher Curl",
+  "Cable Curl",
+  "Cable Hammer Curl",
+  "Triceps Extension",
+  "Triceps Pushdown",
+  "Dip Machine",
+  "Assisted Dip",
+  "Ab Crunch Machine",
+  "Cable Crunch",
+  "Torso Rotation",
+  "Rotary Torso",
+  "Back Extension",
+  "Roman Chair",
+  "Cable Crossover",
+  "Functional Trainer",
+  "Smith Machine",
+  "Power Rack",
+  "Half Rack",
+  "Adjustable Cable",
+  "Löpband",
+  "Crosstrainer",
+  "Motionscykel",
+  "Roddmaskin",
+  "Trappmaskin",
+];
+
 
 /** Nyckeln en baslistemaskin får när den inte har någon känd QR-kod. */
 export function baselineKey(m: BaselineMachine): string {
