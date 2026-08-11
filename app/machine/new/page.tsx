@@ -13,7 +13,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/ui";
-import { ensureGym, newId, normalizeQr, saveMachine, saveProfile } from "@/lib/db";
+import { currentGym, newId, normalizeQr, saveMachine } from "@/lib/db";
 import { useData } from "@/lib/useData";
 import {
   DEFAULT_METRICS,
@@ -56,7 +56,6 @@ function NewMachineForm() {
   const suggestedName = params.get("name") ?? "";
   const { data, loading, error: dataError } = useData();
 
-  const [gymName, setGymName] = useState("");
   const [name, setName] = useState(suggestedName);
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup>("Bröst");
   const [type, setType] = useState<MachineType>("strength");
@@ -67,15 +66,6 @@ function NewMachineForm() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Förifyll gymmet: hemmagymmet först, annars det enda som finns.
-  useEffect(() => {
-    if (loading || gymName) return;
-    const home = data.gyms.find((g) => g.id === data.profile.homeGymId);
-    if (home) setGymName(home.name);
-    else if (data.gyms.length === 1) setGymName(data.gyms[0].name);
-    else setGymName("Nordic Wellness ");
-  }, [loading, data, gymName]);
 
   function changeType(next: MachineType) {
     setType(next);
@@ -93,11 +83,11 @@ function NewMachineForm() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !gymName.trim()) return;
+    if (!name.trim()) return;
     setSaving(true);
     setError(null);
     try {
-      const gym = await ensureGym(gymName);
+      const gym = await currentGym();
       const machine = await saveMachine({
         /*
          * Maskiner utan QR-kod får en egen nyckel. Den måste vara unik
@@ -117,8 +107,6 @@ function NewMachineForm() {
         targetSets,
         note: note.trim() || undefined,
       });
-      // Första gymmet blir automatiskt hemmagym.
-      if (!data.profile.homeGymId) await saveProfile({ homeGymId: gym.id });
       router.replace(`/machine?id=${machine.id}`);
     } catch (e) {
       setSaving(false);
@@ -146,21 +134,6 @@ function NewMachineForm() {
       />
 
       <div className="space-y-4">
-        <Field label="Gym">
-          <TextInput
-            value={gymName}
-            onChange={(e) => setGymName(e.target.value)}
-            placeholder="Nordic Wellness Östermalm"
-            list="gym-list"
-            required
-          />
-          <datalist id="gym-list">
-            {data.gyms.map((g) => (
-              <option key={g.id} value={g.name} />
-            ))}
-          </datalist>
-        </Field>
-
         <Field label="Maskinnamn">
           <TextInput
             value={name}
@@ -308,7 +281,7 @@ function NewMachineForm() {
         type="submit"
         size="lg"
         className="mt-6 w-full"
-        disabled={saving || !name.trim() || !gymName.trim()}
+        disabled={saving || !name.trim()}
       >
         {saving ? "Sparar…" : "Spara maskin"}
       </Button>

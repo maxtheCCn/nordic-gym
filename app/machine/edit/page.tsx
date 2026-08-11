@@ -13,7 +13,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/ui";
-import { deleteMachine, ensureGym, saveMachine } from "@/lib/db";
+import { deleteMachine, saveMachine } from "@/lib/db";
 import { useData } from "@/lib/useData";
 import {
   MACHINE_TYPE_LABELS,
@@ -50,7 +50,6 @@ function EditMachineForm() {
   const { data, loading, error } = useData();
   const machine = data.machines.find((m) => m.id === id);
 
-  const [gymName, setGymName] = useState("");
   const [name, setName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup>("Bröst");
   const [type, setType] = useState<MachineType>("strength");
@@ -64,7 +63,6 @@ function EditMachineForm() {
 
   useEffect(() => {
     if (!machine || ready) return;
-    setGymName(data.gyms.find((g) => g.id === machine.gymId)?.name ?? "");
     setName(machine.name);
     setMuscleGroup(machine.muscleGroup);
     setType(machine.type);
@@ -90,10 +88,8 @@ function EditMachineForm() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!machine) return;
-    const gym = await ensureGym(gymName || "Nordic Wellness");
     await saveMachine({
       ...machine,
-      gymId: gym.id,
       name: name.trim(),
       muscleGroup,
       type,
@@ -111,19 +107,6 @@ function EditMachineForm() {
       <PageHeader title="Redigera maskin" subtitle={machine.name} />
 
       <div className="space-y-4">
-        <Field label="Gym">
-          <TextInput
-            value={gymName}
-            onChange={(e) => setGymName(e.target.value)}
-            list="gym-list-edit"
-          />
-          <datalist id="gym-list-edit">
-            {data.gyms.map((g) => (
-              <option key={g.id} value={g.name} />
-            ))}
-          </datalist>
-        </Field>
-
         <Field label="Maskinnamn">
           <TextInput
             value={name}

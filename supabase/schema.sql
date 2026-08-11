@@ -53,34 +53,103 @@ create policy "egna rader" on public.records
 --  Egen tabell, inte en vy över records. Träningsloggen ovan är privat och ska
 --  förbli det — här ligger bara det man aktivt valt att visa. Två tabeller med
 --  olika regler är enklare att lita på än en tabell med filtrerade rättigheter.
+--
+--  En rad per lyft i stället för en klump per person: då kan listan sorteras
+--  och grupperas av databasen, och ett enskilt lyft kan godkännas för sig.
 -- =============================================================================
-create table if not exists public.leaderboard (
-  user_id      uuid primary key default auth.uid() references auth.users on delete cascade,
+create table if not exists public.leaderboard_lifts (
+  id           text   primary key,
+  user_id      uuid   not null default auth.uid() references auth.users on delete cascade,
   display_name text   not null,
   -- Sökväg i avatars-hinken. Tomt = appen ritar en cirkel med initialen.
   avatar_path  text,
-  -- Övningarna man valt att visa: [{ exercise, weight, reps, at }]
-  -- Uppdateras automatiskt vid varje synk, så listan följer med när man
-  -- förbättrar sig utan att man behöver publicera om.
-  lifts        jsonb  not null default '[]'::jsonb,
+  category     text   not null,
+  exercise     text   not null,
+  weight       numeric not null,
+  reps         int,
+  -- Sätts bara av en administratör, se utlösaren längre ner.
+  verified     boolean not null default false,
   updated_at   bigint not null
 );
 
-alter table public.leaderboard enable row level security;
+create index if not exists leaderboard_lifts_sort_idx
+  on public.leaderboard_lifts (category, exercise, weight desc);
+
+alter table public.leaderboard_lifts enable row level security;
 
 -- Alla inloggade får läsa hela listan — det är själva poängen.
-drop policy if exists "alla inloggade läser" on public.leaderboard;
-create policy "alla inloggade läser" on public.leaderboard
-  for select
-  to authenticated
-  using (true);
+drop policy if exists "alla inloggade läser" on public.leaderboard_lifts;
+create policy "alla inloggade läser" on public.leaderboard_lifts
+  for select to authenticated using (true);
 
--- Men bara sin egen rad får man skriva.
-drop policy if exists "skriv egen rad" on public.leaderboard;
-create policy "skriv egen rad" on public.leaderboard
+drop policy if exists "skriv egna lyft" on public.leaderboard_lifts;
+create policy "skriv egna lyft" on public.leaderboard_lifts
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- =============================================================================
+--  Administratörer
+--
+--  Lösenordet i appen låser bara upp knapparna. Vem som helst som läser appens
+--  JavaScript hittar det, så det får inte vara det enda som skyddar. Den
+--  riktiga kontrollen sitter här: bara den som står i tabellen kan sätta en
+--  bock, oavsett vad som skrivs i rutan eller skickas direkt till API:et.
+--
+--  Lägg till dig själv när du vet ditt användar-id:
+--    insert into public.admins (user_id) values ('<ditt-uuid>');
+--  Id:t hittar du under Authentication → Users i Supabase.
+-- =============================================================================
+create table if not exists public.admins (
+  user_id uuid primary key references auth.users on delete cascade
+);
+
+alter table public.admins enable row level security;
+
+-- Alla inloggade får se vilka som är administratörer, så att appen kan visa
+-- adminvyn för rätt person. Ingen kan skriva i tabellen via appen.
+drop policy if exists "alla inloggade läser admins" on public.admins;
+create policy "alla inloggade läser admins" on public.admins
+  for select to authenticated using (true);
+
+-- Administratörer får ändra andras lyft: godkänna dem och rätta namn.
+drop policy if exists "admin ändrar alla lyft" on public.leaderboard_lifts;
+create policy "admin ändrar alla lyft" on public.leaderboard_lifts
+  for update
+  to authenticated
+  using (exists (select 1 from public.admins a where a.user_id = auth.uid()))
+  with check (exists (select 1 from public.admins a where a.user_id = auth.uid()));
+
+/*
+ * Hindrar alla utom administratörer från att sätta bocken.
+ *
+ * Utan den här kunde vem som helst skicka verified = true direkt till API:et
+ * och bocken vore meningslös. Utlösaren återställer värdet i stället för att
+ * avvisa skrivningen, så ett vanligt sparande fortfarande går igenom.
+ */
+create or replace function public.enforce_verified()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.admins a where a.user_id = auth.uid()) then
+    new.verified := coalesce(old.verified, false);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_verified_ins on public.leaderboard_lifts;
+create trigger enforce_verified_ins
+  before insert on public.leaderboard_lifts
+  for each row execute function public.enforce_verified();
+
+drop trigger if exists enforce_verified_upd on public.leaderboard_lifts;
+create trigger enforce_verified_upd
+  before update on public.leaderboard_lifts
+  for each row execute function public.enforce_verified();
 
 -- =============================================================================
 --  Profilbilder

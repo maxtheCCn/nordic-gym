@@ -229,11 +229,13 @@ async function seedBaseline(db: IDBPDatabase<NordicDB>): Promise<number> {
 
   // Baslistan behöver ett gym att höra till. Finns inget skapas ett, som går
   // att döpa om till rätt klubb.
-  let gym = alive(await db.getAll("gyms"))[0];
+  let gym = alive(await db.getAll("gyms")).sort(
+    (a, b) => a.createdAt - b.createdAt,
+  )[0];
   if (!gym) {
     gym = touch({
       id: newId(),
-      name: "Nordic Wellness",
+      name: DEFAULT_GYM,
       createdAt: Date.now(),
       deletedAt: null,
     });
@@ -448,6 +450,34 @@ export async function listGyms(): Promise<Gym[]> {
 export async function getGym(id: string): Promise<Gym | undefined> {
   const db = await getDb();
   return db.get("gyms", id);
+}
+
+/** Namnet ett nytt gym får. Appen används på ett enda gym. */
+export const DEFAULT_GYM = "Nordic Wellness Garnisonen";
+
+/**
+ * Appens enda gym.
+ *
+ * Tidigare kunde man ha flera klubbar, med en gymväljare i varje
+ * maskinformulär. Det var ett fält att fylla i vid varje registrering för en
+ * valmöjlighet som aldrig användes. Nu finns ett gym, vars namn går att ändra
+ * i inställningarna.
+ */
+export async function currentGym(): Promise<Gym> {
+  const db = await getDb();
+  const existing = alive(await db.getAll("gyms")).sort(
+    (a, b) => a.createdAt - b.createdAt,
+  )[0];
+  if (existing) return existing;
+
+  const gym = touch({
+    id: newId(),
+    name: DEFAULT_GYM,
+    createdAt: Date.now(),
+    deletedAt: null,
+  });
+  await db.put("gyms", gym);
+  return gym;
 }
 
 /** Hämtar gymmet med det namnet, eller skapar det om det inte finns. */

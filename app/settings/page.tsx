@@ -14,10 +14,19 @@ import {
   TextArea,
   TextInput,
 } from "@/components/ui";
+import { AdminPanel } from "@/components/AdminPanel";
 import { SyncPanel } from "@/components/SyncPanel";
 import { buildLabel, reloadFresh } from "@/components/UpdateBanner";
 import { enterDemo, exitDemo, isDemo, resetDemoData } from "@/lib/demo";
-import { clearAll, exportBackup, importBackup, saveProfile } from "@/lib/db";
+import {
+  clearAll,
+  currentGym,
+  DEFAULT_GYM,
+  exportBackup,
+  importBackup,
+  renameGym,
+  saveProfile,
+} from "@/lib/db";
 import { useData } from "@/lib/useData";
 import { GOALS, type Goal } from "@/lib/types";
 
@@ -27,6 +36,7 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [bodyWeight, setBodyWeight] = useState("");
+  const [gymName, setGymName] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [paste, setPaste] = useState("");
@@ -41,6 +51,7 @@ export default function SettingsPage() {
     setName(data.profile.name ?? "");
     setAge(data.profile.age ? String(data.profile.age) : "");
     setBodyWeight(data.profile.bodyWeight ? String(data.profile.bodyWeight) : "");
+    setGymName(data.gyms[0]?.name ?? "");
     setHydrated(true);
   }, [loading, data.profile, hydrated]);
 
@@ -177,27 +188,26 @@ export default function SettingsPage() {
             ))}
           </Select>
         </Field>
-        {data.gyms.length > 0 && (
-          <Field
-            label="Hemmagym"
-            hint="Väljs automatiskt när ett nytt pass startas."
-          >
-            <Select
-              value={data.profile.homeGymId ?? ""}
-              onChange={(e) => persist({ homeGymId: e.target.value })}
-            >
-              <option value="" disabled>
-                Välj gym
-              </option>
-              {data.gyms.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
+        {/* Appen används på ett gym. Namnet går att ändra, men det finns
+            ingen väljare — det var ett fält att fylla i vid varje maskin för
+            en valmöjlighet som aldrig användes. */}
+        <Field label="Gym">
+          <TextInput
+            value={gymName}
+            onChange={(e) => setGymName(e.target.value)}
+            onBlur={async () => {
+              const gym = await currentGym();
+              if (gymName.trim() && gymName.trim() !== gym.name) {
+                await renameGym(gym.id, gymName.trim());
+                await reload();
+              }
+            }}
+            placeholder={DEFAULT_GYM}
+          />
+        </Field>
       </div>
+
+      <AdminPanel />
 
       <SectionTitle>Appen</SectionTitle>
       <div className="card space-y-3 p-4">
