@@ -1,0 +1,18 @@
+{
+  "name": "NW Logg — träningslogg för Nordic Wellness",
+  "short_name": "NW Logg",
+  "description": "Skanna maskinen, logga vikt och reps, exportera träningsrapport.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
